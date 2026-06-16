@@ -13,7 +13,12 @@
       "Bash(curl -sSL -o /dev/null -w \"final: %{url_effective}  status: %{http_code}\\\\n\" https://nexisfolio.com/app)",
       "Read(//c/Users/pdwat/.claude/projects/c--Users-pdwat-Desktop-Portfolio-Tracking-app/memory/**)",
       "Bash(git mv *)",
-      "Bash(mv src/middleware.ts src/proxy.ts)"
+      "Bash(mv src/middleware.ts src/proxy.ts)",
+      "Bash(git check-ignore *)",
+      "Bash(curl -sS -o /dev/null -w \"auth health: %{http_code}\\\\n\" \"https://yxjknybsbxfadijslzgd.supabase.co/auth/v1/health\" -H \"apikey: sb_publishable_WDgSffUllA4weQTmwl5Wiw_mSfFQnpL\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"=== tsc exit: $? ===\")",
+      "Bash(git push *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\pdwat\\.claude\\projects\\c--Users-pdwat-Desktop-Portfolio-Tracking-app\\memory"

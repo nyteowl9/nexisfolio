@@ -1,24 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
-import { totals, recompute, fmtUSD, fmtPct, type Position } from "@/lib/engine";
-import { POSITIONS, CATALOG, CARD_ITEMS } from "@/lib/sample/sample-data";
+import { totals, fmtUSD, fmtPct } from "@/lib/engine";
+import { getPortfolio } from "@/lib/db/portfolio";
 
 export const metadata = { title: "Dashboard — NEXIS FOLIO" };
-
-// Build the sample portfolio (cards aggregate derived from line-items).
-function samplePortfolio(): Position[] {
-  const positions = POSITIONS.map((p) => ({ ...p }));
-  const cards = positions.find((p) => p.id === "cards");
-  if (cards) {
-    cards.items = CARD_ITEMS;
-    const agg = recompute(CARD_ITEMS, CATALOG);
-    cards.value = agg.value;
-    cards.basis = agg.basis;
-    cards.qty = agg.qty;
-  }
-  return positions;
-}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -27,10 +13,9 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // TODO Phase 2: load the user's real positions from Postgres.
-  // For now we render the engine over the sample portfolio to prove the
-  // typed engine drives real React rendering end-to-end.
-  const t = totals(samplePortfolio());
+  const positions = await getPortfolio(supabase);
+  const hasData = positions.length > 0;
+  const t = totals(positions);
 
   const metrics = [
     { label: "Liquid", value: t.liquid },
@@ -55,32 +40,41 @@ export default async function DashboardPage() {
       </header>
 
       <div className="mx-auto max-w-[1240px] px-6 py-10">
-        <p className="text-sm text-[#8A9099]">Total net worth</p>
-        <div className="mt-1 flex items-baseline gap-3">
-          <h1 className="text-5xl font-semibold tabular-nums tracking-tight">
-            {fmtUSD(t.net, { full: true })}
-          </h1>
-          <span className={t.change24 >= 0 ? "text-[#0E9D6E]" : "text-[#E0443E]"}>
-            {fmtUSD(t.change24, { full: true })} ({fmtPct(t.changePct, true)})
-          </span>
-        </div>
-
-        <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {metrics.map((m) => (
-            <div key={m.label} className="rounded-[10px] border border-[#E7E8EA] bg-white p-4">
-              <p className="text-xs text-[#8A9099]">{m.label}</p>
-              <p className="mt-1 text-lg font-medium tabular-nums">
-                {fmtUSD(m.value, { full: true })}
-              </p>
+        {!hasData ? (
+          <div className="rounded-[10px] border border-dashed border-[#E7E8EA] bg-white p-10 text-center">
+            <h1 className="text-2xl font-semibold tracking-tight">Welcome to NEXIS FOLIO</h1>
+            <p className="mx-auto mt-2 max-w-md text-sm text-[#5C6168]">
+              Your portfolio is empty. Next milestone wires up onboarding — connect a brokerage,
+              add a wallet, add assets by hand, or load the sample portfolio to explore.
+            </p>
+            <p className="mt-4 text-xs text-[#8A9099]">
+              Signed in as {user.email} · live Postgres + Row-Level Security active.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-[#8A9099]">Total net worth</p>
+            <div className="mt-1 flex items-baseline gap-3">
+              <h1 className="text-5xl font-semibold tabular-nums tracking-tight">
+                {fmtUSD(t.net, { full: true })}
+              </h1>
+              <span className={t.change24 >= 0 ? "text-[#0E9D6E]" : "text-[#E0443E]"}>
+                {fmtUSD(t.change24, { full: true })} ({fmtPct(t.changePct, true)})
+              </span>
             </div>
-          ))}
-        </div>
 
-        <p className="mt-8 rounded-[10px] border border-dashed border-[#E7E8EA] bg-white p-4 text-sm text-[#8A9099]">
-          Showing the <strong>sample portfolio</strong> via the live TypeScript engine. Next
-          milestone: load your real holdings from Postgres and rebuild the full Overview, Detail,
-          and History views.
-        </p>
+            <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+              {metrics.map((m) => (
+                <div key={m.label} className="rounded-[10px] border border-[#E7E8EA] bg-white p-4">
+                  <p className="text-xs text-[#8A9099]">{m.label}</p>
+                  <p className="mt-1 text-lg font-medium tabular-nums">
+                    {fmtUSD(m.value, { full: true })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </main>
   );
