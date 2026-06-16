@@ -11,7 +11,9 @@
       "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" https://nexisfolio.com/demo/tokens.css)",
       "Bash(curl -sSL -o /dev/null -w \"final: %{url_effective}  status: %{http_code}\\\\n\" https://nexisfolio.com/)",
       "Bash(curl -sSL -o /dev/null -w \"final: %{url_effective}  status: %{http_code}\\\\n\" https://nexisfolio.com/app)",
-      "Read(//c/Users/pdwat/.claude/projects/c--Users-pdwat-Desktop-Portfolio-Tracking-app/memory/**)"
+      "Read(//c/Users/pdwat/.claude/projects/c--Users-pdwat-Desktop-Portfolio-Tracking-app/memory/**)",
+      "Bash(git mv *)",
+      "Bash(mv src/middleware.ts src/proxy.ts)"
     ],
     "additionalDirectories": [
       "c:\\Users\\pdwat\\.claude\\projects\\c--Users-pdwat-Desktop-Portfolio-Tracking-app\\memory"
