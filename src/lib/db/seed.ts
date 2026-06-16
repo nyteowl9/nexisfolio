@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isUnitPriced, recompute, type Position } from "@/lib/engine";
-import { POSITIONS, CARD_ITEMS, DISPOSALS, CATALOG } from "@/lib/sample/sample-data";
+import { POSITIONS, CARD_ITEMS, DISPOSALS, CATALOG, TRANSACTIONS } from "@/lib/sample/sample-data";
 import { priceKey } from "@/lib/db/portfolio";
 
 type Row = Record<string, unknown>;
@@ -137,6 +137,27 @@ export async function seedSamplePortfolio() {
   if (disposalRows.length) {
     const { error: de } = await supabase.from("disposals").insert(disposalRows);
     if (de) throw new Error(`seed disposals: ${de.message}`);
+  }
+
+  // Transactions ledger (for the History tab).
+  const txRows = TRANSACTIONS.map((x) => ({
+    user_id: user.id,
+    position_id: posIdByKey[priceKey(x.cls as never, x.ticker)] ?? null,
+    tx_date: x.date,
+    type: x.type,
+    cls: x.cls,
+    ticker: x.ticker,
+    name: x.name,
+    qty: x.qty,
+    price: x.price,
+    amount: x.amount,
+    account: x.account,
+    source: x.source,
+    note: x.note,
+  }));
+  if (txRows.length) {
+    const { error: te } = await supabase.from("transactions").insert(txRows);
+    if (te) throw new Error(`seed transactions: ${te.message}`);
   }
 
   // Seed shared price_cache for unit-priced assets (service role bypasses RLS).

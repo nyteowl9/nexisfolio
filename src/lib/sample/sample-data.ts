@@ -116,6 +116,35 @@ export const CATALOG: Catalog = {
   sealedById: Object.fromEntries(SEALED.map((s) => [s.id, s])),
 };
 
+export interface SampleTx {
+  date: string;
+  type: "buy" | "sell" | "deposit" | "withdrawal" | "dividend" | "valuation" | "loan_payment" | "transfer";
+  cls: string;
+  ticker: string | null;
+  name: string;
+  qty: number | null;
+  price: number | null;
+  amount: number | null;
+  account: string;
+  source: "live" | "manual";
+  note: string;
+}
+
+export const TRANSACTIONS: SampleTx[] = [
+  { date: "2026-06-12", type: "buy", cls: "crypto", ticker: "BTC", name: "Bitcoin", qty: 0.05, price: 67800, amount: null, account: "Coinbase", source: "live", note: "DCA buy" },
+  { date: "2026-06-08", type: "dividend", cls: "stocks", ticker: "VTI", name: "Vanguard Total Mkt ETF", qty: null, price: null, amount: 412, account: "Fidelity", source: "live", note: "Quarterly dividend" },
+  { date: "2026-05-29", type: "sell", cls: "crypto", ticker: "SOL", name: "Solana", qty: 20, price: 154.8, amount: null, account: "Phantom", source: "live", note: "Trim position" },
+  { date: "2026-05-15", type: "valuation", cls: "realest", ticker: null, name: "Primary Residence · Austin TX", qty: null, price: null, amount: 243000, account: "Zillow estimate", source: "manual", note: "Updated estimate" },
+  { date: "2026-05-08", type: "sell", cls: "stocks", ticker: "AAPL", name: "Apple Inc.", qty: 30, price: 212.4, amount: null, account: "Fidelity · Brokerage", source: "live", note: "Rebalance" },
+  { date: "2026-05-01", type: "loan_payment", cls: "loans", ticker: null, name: "Personal Loan · Friend", qty: null, price: null, amount: 289.99, account: "Note", source: "manual", note: "Payment received" },
+  { date: "2026-04-22", type: "deposit", cls: "cash", ticker: null, name: "HYSA · Marcus", qty: null, price: null, amount: 1500, account: "Marcus", source: "live", note: "Paycheck sweep" },
+  { date: "2026-04-03", type: "sell", cls: "crypto", ticker: "ETH", name: "Ethereum", qty: 1, price: 3512, amount: null, account: "MetaMask", source: "live", note: "Took profit" },
+  { date: "2026-03-15", type: "valuation", cls: "private", ticker: null, name: "Graded Cards · PSA 10", qty: null, price: null, amount: 6400, account: "Collectr", source: "manual", note: "Daily revaluation" },
+  { date: "2026-03-01", type: "buy", cls: "metals", ticker: "XAU", name: "Gold Bullion", qty: 1, price: 2280, amount: null, account: "Vault", source: "manual", note: "Added 1 oz" },
+  { date: "2026-02-12", type: "sell", cls: "crypto", ticker: "BTC", name: "Bitcoin", qty: 0.1, price: 68420, amount: null, account: "Coinbase", source: "live", note: "Rebalance to cash" },
+  { date: "2026-01-22", type: "sell", cls: "stocks", ticker: "NVDA", name: "NVIDIA Corp.", qty: 50, price: 125.1, amount: null, account: "Fidelity · Brokerage", source: "live", note: "Trim winner" },
+];
+
 export const CARD_ITEMS: CardItem[] = [
   { id: "i1", catId: "base-4", type: "graded", grader: "PSA", grade: "9", qty: 1, basis: 1800, acquired: "2021-11-20" },
   { id: "i2", catId: "op01-120", type: "graded", grader: "PSA", grade: "10", qty: 1, basis: 240, acquired: "2023-02-10" },

@@ -2,15 +2,25 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut } from "@/app/login/actions";
 import { Bolt, Search, Sun, Moon, Plus, Menu } from "@/components/ui/icons";
 
-const TABS = ["Overview", "History", "Watchlist", "News", "Retirement", "Tax", "Connections"];
+const TABS: Array<[string, string]> = [
+  ["Overview", "/dashboard"],
+  ["History", "/history"],
+  ["Watchlist", "/watchlist"],
+  ["News", "/news"],
+  ["Retirement", "/retirement"],
+  ["Tax", "/tax"],
+  ["Connections", "/connections"],
+];
 
 export function AppHeader({ email }: { email?: string }) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [navOpen, setNavOpen] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     const saved = (localStorage.getItem("nf-theme") as "light" | "dark") || "light";
@@ -59,29 +69,27 @@ export function AppHeader({ email }: { email?: string }) {
           <Image src="/demo/landing-assets/nexis-mark.png" alt="Nexis Folio" width={24} height={24} style={{ height: 24, width: "auto" }} />
           <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: ".08em", color: "var(--ink)" }}>NEXIS FOLIO</span>
         </Link>
-        <nav className="nw-nav" style={{ display: "flex", gap: 20, minWidth: 0 }}>
-          {TABS.map((label, i) => {
-            const active = i === 0;
+        <nav className="nw-nav" style={{ display: "flex", gap: 20, minWidth: 0, overflowX: "auto" }}>
+          {TABS.map(([label, href]) => {
+            const active = pathname === href || (href === "/dashboard" && pathname.startsWith("/detail"));
             return (
-              <button
-                key={label}
-                disabled={!active}
-                title={active ? undefined : "Coming soon"}
+              <Link
+                key={href}
+                href={href}
                 style={{
+                  display: "flex",
+                  alignItems: "center",
                   padding: "6px 2px",
                   fontSize: 13.5,
                   fontWeight: active ? 600 : 450,
-                  color: active ? "var(--ink)" : "var(--ink-3)",
-                  background: "none",
-                  border: "none",
+                  color: active ? "var(--ink)" : "var(--ink-2)",
                   borderBottom: `2px solid ${active ? "var(--ink)" : "transparent"}`,
-                  cursor: active ? "default" : "not-allowed",
                   height: 56,
-                  fontFamily: "var(--font-sans)",
+                  whiteSpace: "nowrap",
                 }}
               >
                 {label}
-              </button>
+              </Link>
             );
           })}
         </nav>

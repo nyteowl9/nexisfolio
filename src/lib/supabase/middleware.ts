@@ -2,7 +2,17 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /** Protected route prefixes — unauthenticated users are bounced to /login. */
-const PROTECTED = ["/dashboard", "/onboarding"];
+const PROTECTED = [
+  "/dashboard",
+  "/onboarding",
+  "/history",
+  "/watchlist",
+  "/news",
+  "/retirement",
+  "/tax",
+  "/connections",
+  "/detail",
+];
 
 /**
  * Refreshes the Supabase auth session on every request and guards protected

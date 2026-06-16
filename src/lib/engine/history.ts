@@ -30,3 +30,35 @@ export function netWorthSeries(net: number, range: Range = "1W"): number[] {
   if (pts.length) pts[pts.length - 1] = net;
   return pts;
 }
+
+/** Large deposit/withdrawal markers on the history chart (demo, per range). */
+export const FLOW_MARKERS: Partial<Record<Range, { t: number; type: "in" | "out"; amt: number; label: string }[]>> = {
+  "1Y": [
+    { t: 0.18, type: "in", amt: 9000, label: "Bonus" },
+    { t: 0.52, type: "out", amt: -12000, label: "Car repair" },
+    { t: 0.81, type: "in", amt: 6000, label: "Tax refund" },
+  ],
+  ALL: [
+    { t: 0.22, type: "in", amt: 45000, label: "Home down-payment" },
+    { t: 0.55, type: "in", amt: 18000, label: "401(k) rollover" },
+    { t: 0.88, type: "out", amt: -9000, label: "Withdrawal" },
+  ],
+};
+
+/** Deterministic sparkline for a watchlist symbol (demo until real history). */
+export function spark(sym: string, price: number): number[] {
+  let seed = 0;
+  for (const ch of sym) seed = (seed * 31 + ch.charCodeAt(0)) & 0x7fffffff;
+  const rnd = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+  const out: number[] = [];
+  let v = price * (0.82 + rnd() * 0.12);
+  for (let i = 0; i < 32; i++) {
+    v = v + (price - v) * 0.05 + (rnd() - 0.48) * price * 0.03;
+    out.push(Math.max(price * 0.5, v));
+  }
+  out[out.length - 1] = price;
+  return out;
+}
