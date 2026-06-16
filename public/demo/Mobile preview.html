@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NEXIS FOLIO — mobile preview</title>
+<style>
+  :root { --ink:#15171A; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #eceef0; color: var(--ink); padding: 28px 20px 60px; }
+  .head { max-width: 980px; margin: 0 auto 8px; }
+  .head h1 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 6px; }
+  .head p { font-size: 14px; color: #5C6168; margin: 0 0 4px; line-height: 1.5; }
+  .row { display: flex; gap: 36px; justify-content: center; flex-wrap: wrap; margin-top: 28px; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .label { font-size: 13px; font-weight: 600; color: #5C6168; }
+  /* phone bezel */
+  .phone { width: 390px; height: 800px; border-radius: 44px; background: #0d0e10; padding: 12px; box-shadow: 0 30px 60px -20px rgba(20,22,26,.4); position: relative; }
+  .phone::before { content: ''; position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 120px; height: 26px; background: #0d0e10; border-radius: 0 0 16px 16px; z-index: 2; }
+  .screen { width: 100%; height: 100%; border-radius: 32px; overflow: hidden; background: #fff; }
+  iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .links { max-width: 980px; margin: 0 auto; display: flex; gap: 10px; flex-wrap: wrap; }
+  .links a { font-size: 13px; font-weight: 600; color: #fff; background: var(--ink); padding: 9px 16px; border-radius: 999px; text-decoration: none; }
+  .tip { max-width: 980px; margin: 22px auto 0; font-size: 13px; color: #5C6168; line-height: 1.6; background: #fff; border: .5px solid #E7E8EA; border-radius: 12px; padding: 16px 18px; }
+  .tip b { color: var(--ink); }
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>NEXIS FOLIO — mobile preview</h1>
+    <p>These are live, scrollable phone frames (390&nbsp;px wide) — interact with them just like a real device.</p>
+  </div>
+  <div class="links">
+    <a href="NEST WATCH.html" target="_blank">Open landing full-screen ↗</a>
+    <a href="$ALL.html" target="_blank">Open dashboard full-screen ↗</a>
+  </div>
+  <div class="row">
+    <div class="col"><span class="label">Landing &amp; onboarding</span><div class="phone"><div class="screen"><iframe src="NEST WATCH.html" title="Landing"></iframe></div></div></div>
+    <div class="col"><span class="label">Dashboard</span><div class="phone"><div class="screen"><iframe src="$ALL.html" title="Dashboard"></iframe></div></div></div>
+  </div>
+  <div class="tip">
+    <b>Other ways to check mobile:</b> open either file full-screen (links above) and either (1) drag the browser window narrow until it&apos;s under ~760&nbsp;px, or (2) open DevTools (<b>F12</b>) and toggle the device toolbar (<b>⌘⇧M</b> on Mac / <b>Ctrl+Shift+M</b> on Windows), then pick a phone like iPhone&nbsp;15. The responsive layout switches on automatically below 760&nbsp;px.
+  </div>
+</body>
+</html>
