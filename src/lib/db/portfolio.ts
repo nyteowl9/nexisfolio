@@ -48,6 +48,7 @@ interface CardItemRow {
   set_code: string | null;
   set_name: string | null;
   number: string | null;
+  manual_value: number | null;
 }
 interface LoanRow {
   position_id: string;
@@ -106,6 +107,7 @@ export async function getPortfolio(supabase: SupabaseClient): Promise<Position[]
       basis: it.basis,
       acquired: it.acquired_date ?? "",
       manual: it.is_manual,
+      value: it.manual_value ?? undefined,
       name: it.name ?? undefined,
       game: it.game ?? undefined,
       setCode: it.set_code ?? undefined,

@@ -7,6 +7,8 @@ import type {
   CardItem,
   CatalogCard,
   CatalogSealed,
+  CatalogGame,
+  CatalogSet,
   Catalog,
   Disposal,
   LoanInterest,
@@ -111,9 +113,34 @@ export const SEALED: CatalogSealed[] = [
   { id: "s-mh3-cb", game: "mtg", set: "mtg-mh3", name: "Modern Horizons 3 Collector Box", kind: "Collector Box", daily: 0.5, price: 310 },
 ];
 
+export const GAMES: Record<string, CatalogGame> = {
+  op: { key: "op", label: "One Piece", color: "#C0303A", tint: "#F6E2E3" },
+  pkm: { key: "pkm", label: "Pokémon", color: "#2E6FE0", tint: "#E4ECFB" },
+  lor: { key: "lor", label: "Lorcana", color: "#1E9E8F", tint: "#DCF1EE" },
+  mtg: { key: "mtg", label: "Magic", color: "#B5703C", tint: "#F2E6D9" },
+  sports: { key: "sports", label: "Sports", color: "#0E9D6E", tint: "#DCF1E8" },
+};
+
+export const SETS: Record<string, CatalogSet> = {
+  "op-13": { id: "op-13", game: "op", code: "OP-13", name: "Booster Set 13", year: 2025 },
+  "op-09": { id: "op-09", game: "op", code: "OP-09", name: "Emperors in the New World", year: 2024 },
+  "op-05": { id: "op-05", game: "op", code: "OP-05", name: "Awakening of the New Era", year: 2023 },
+  "op-01": { id: "op-01", game: "op", code: "OP-01", name: "Romance Dawn", year: 2022 },
+  "eb-01": { id: "eb-01", game: "op", code: "EB-01", name: "Memorial Collection", year: 2024 },
+  "sv-151": { id: "sv-151", game: "pkm", code: "151", name: "Scarlet & Violet — 151", year: 2023 },
+  "sv-prismatic": { id: "sv-prismatic", game: "pkm", code: "PRE", name: "Prismatic Evolutions", year: 2025 },
+  "sv-surging": { id: "sv-surging", game: "pkm", code: "SSP", name: "Surging Sparks", year: 2024 },
+  "base-1999": { id: "base-1999", game: "pkm", code: "BASE", name: "Base Set (Unlimited)", year: 1999 },
+  "lor-rise": { id: "lor-rise", game: "lor", code: "RISE", name: "Rise of the Floodborn", year: 2023 },
+  "mtg-mh3": { id: "mtg-mh3", game: "mtg", code: "MH3", name: "Modern Horizons 3", year: 2024 },
+  "topps-chrome": { id: "topps-chrome", game: "sports", code: "TOPPS", name: "Chrome Baseball", year: 2023 },
+};
+
 export const CATALOG: Catalog = {
   cardById: Object.fromEntries(CARDS.map((c) => [c.id, c])),
   sealedById: Object.fromEntries(SEALED.map((s) => [s.id, s])),
+  sets: SETS,
+  games: GAMES,
 };
 
 export interface SampleTx {

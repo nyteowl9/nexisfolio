@@ -195,6 +195,50 @@ function Projection({ m, mc }: { m: M; mc: MC | null }) {
   );
 }
 
+function Milestones({ m }: { m: M }) {
+  const endBal = m.series[m.series.length - 1].bal;
+  const nodes: { age: number; label: string; value: number | null; color: string }[] = [
+    { age: m.currentAge, label: "Today", value: m.investable, color: "var(--accent)" },
+  ];
+  if (m.method === "coast" && m.coastStop < m.retireAge) nodes.push({ age: m.coastStop, label: "Stop saving", value: null, color: "var(--pos)" });
+  if (m.fireAge != null && m.fireAge > m.currentAge + 0.05 && m.fireAge <= m.endAge) nodes.push({ age: Math.ceil(m.fireAge), label: "Goal reached", value: m.target, color: "var(--c-loans)" });
+  nodes.push({ age: m.retireAge, label: "Retire", value: m.projWithContrib, color: "var(--ink-2)" });
+  nodes.push({ age: m.endAge, label: m.neverDepletes ? "Plan end" : "Runs dry", value: m.neverDepletes ? endBal : 0, color: m.neverDepletes ? "var(--ink-2)" : "var(--neg)" });
+  nodes.sort((a, b) => a.age - b.age);
+  const frac = (age: number) => ((age - m.currentAge) / (m.endAge - m.currentAge)) * 100;
+
+  return (
+    <div style={{ ...card, padding: "20px 26px 22px" }}>
+      <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600, marginBottom: 26 }}>Your timeline</div>
+      <div style={{ position: "relative", height: 64, margin: "0 6px" }}>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 31, height: 3, borderRadius: 99, background: "var(--bg-sunk)" }} />
+        <div style={{ position: "absolute", left: 0, top: 31, height: 3, borderRadius: 99, background: "var(--accent)", width: `${frac(Math.min(m.retireAge, m.endAge))}%` }} />
+        {nodes.map((n, i) => {
+          const above = i % 2 === 0;
+          return (
+            <div key={n.label + n.age} style={{ position: "absolute", left: `${frac(n.age)}%`, top: 0, height: 64, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              {above && (
+                <div style={{ position: "absolute", bottom: 38, textAlign: "center", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink)" }}>{n.label}</div>
+                  {n.value != null && <div className="num" style={{ fontSize: 11, color: "var(--ink-3)" }}>{fmtUSD(n.value)}</div>}
+                </div>
+              )}
+              <div style={{ width: 12, height: 12, borderRadius: 99, background: n.color, border: "2.5px solid var(--surface)", boxShadow: "0 0 0 1px var(--border)" }} />
+              <div className="num" style={{ position: "absolute", top: above ? 38 : undefined, bottom: above ? undefined : 38, fontSize: 10.5, color: "var(--ink-3)", fontWeight: 500 }}>{`age ${n.age}`}</div>
+              {!above && (
+                <div style={{ position: "absolute", top: 38, textAlign: "center", whiteSpace: "nowrap", paddingTop: 14 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink)" }}>{n.label}</div>
+                  {n.value != null && <div className="num" style={{ fontSize: 11, color: "var(--ink-3)" }}>{fmtUSD(n.value)}</div>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function RetirementPlanner({ positions }: { positions: Position[] }) {
   const [method, setMethod] = useState<"traditional" | "coast" | "fire">("coast");
   const [scenario, setScenario] = useState("Base");
@@ -280,12 +324,15 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
       </div>
 
       <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16, alignItems: "start", marginBottom: 18 }}>
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 22px 0" }}>
-            <span style={{ fontSize: 13.5, fontWeight: 600 }}>Wealth projection</span>
-            <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{`age ${currentAge} → ${m.endAge} · today's dollars · hover to inspect`}</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={card}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 22px 0" }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>Wealth projection</span>
+              <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{`age ${currentAge} → ${m.endAge} · today's dollars · hover to inspect`}</span>
+            </div>
+            <div style={{ padding: "12px 22px 18px" }}><Projection m={m} mc={mc} /></div>
           </div>
-          <div style={{ padding: "12px 22px 18px" }}><Projection m={m} mc={mc} /></div>
+          <Milestones m={m} />
         </div>
         <div style={{ ...card, padding: 20 }}>
           <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600, marginBottom: 14 }}>The big levers</div>

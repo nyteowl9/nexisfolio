@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
@@ -68,11 +69,12 @@ function HoldingRow({ p }: { p: Position }) {
           ? `${p.grade} · valued ${dateShort(p.valued)}`
           : `valued ${dateShort(p.valued)}`;
   return (
-    <div
+    <Link
+      href={`/detail/${p.id}`}
       className="nw-holding"
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      style={{ display: "grid", gridTemplateColumns: COLS, alignItems: "center", gap: 12, padding: "12px 22px 12px 24px", borderTop: "var(--hair) solid var(--border)", background: hov ? "var(--surface-2)" : "transparent" }}
+      style={{ display: "grid", gridTemplateColumns: COLS, alignItems: "center", gap: 12, padding: "12px 22px 12px 24px", borderTop: "var(--hair) solid var(--border)", background: hov ? "var(--surface-2)" : "transparent", color: "var(--ink)" }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
         <AssetIcon cls={p.cls} ticker={p.ticker} name={p.name} size={36} />
@@ -90,7 +92,7 @@ function HoldingRow({ p }: { p: Position }) {
         <div className="num" style={{ fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)", marginTop: 1 }}>{fmtPct(plPct, true)}</div>
       </div>
       <div style={{ color: hov ? "var(--ink-3)" : "transparent", display: "flex", justifyContent: "flex-end" }}><Chevron size={15} /></div>
-    </div>
+    </Link>
   );
 }
 

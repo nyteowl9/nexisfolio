@@ -154,8 +154,41 @@ export interface CardItem {
   kind?: string;
 }
 
+export interface CatalogGame {
+  key: string;
+  label: string;
+  color: string;
+  tint: string;
+}
+
+export interface CatalogSet {
+  id: string;
+  game: string;
+  code: string;
+  name: string;
+  year: number;
+}
+
 /** Catalog lookup the card engine reads from (DB-backed in production). */
 export interface Catalog {
   cardById: Record<string, CatalogCard>;
   sealedById: Record<string, CatalogSealed>;
+  sets: Record<string, CatalogSet>;
+  games: Record<string, CatalogGame>;
+}
+
+/** Resolved display metadata for a collection line-item. */
+export interface ItemMeta {
+  name: string;
+  set: { code: string; name: string } | null;
+  game: string | null;
+  gameColor: string;
+  gameTint: string;
+  gameLabel: string;
+  num: string;
+  rarity: string;
+  sealed: boolean;
+  prices?: CardPrices | null;
+  custom?: boolean;
+  img: string | null;
 }
