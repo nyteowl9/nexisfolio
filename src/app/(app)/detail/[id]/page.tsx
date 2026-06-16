@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPortfolio } from "@/lib/db/portfolio";
-import { taxSummary, type AssetClass, type Disposal } from "@/lib/engine";
+import { getCatalogFor } from "@/lib/db/catalog";
+import { taxSummary, type AssetClass, type Catalog, type Disposal } from "@/lib/engine";
 import { AssetDetail } from "@/components/app/AssetDetail";
 
 export const metadata = { title: "Asset — NEXIS FOLIO" };
@@ -28,6 +29,12 @@ export default async function DetailPage({ params }: { params: Promise<{ id: str
   const position = positions.find((p) => p.id === id);
   if (!position) redirect("/dashboard");
 
+  // Merged catalog (sample + provider-synced card_catalog) for pricing cards.
+  let catalog: Catalog | undefined;
+  if (position.items?.length) {
+    catalog = await getCatalogFor(supabase, position.items.map((i) => i.catId).filter(Boolean) as string[]);
+  }
+
   // realized P/L for this asset (FIFO) from disposals
   let realized = 0;
   if (position.ticker && position.ticker !== "—") {
@@ -47,5 +54,5 @@ export default async function DetailPage({ params }: { params: Promise<{ id: str
       .reduce((s, r) => s + r.gain, 0);
   }
 
-  return <AssetDetail position={position} realized={realized} />;
+  return <AssetDetail position={position} realized={realized} catalog={catalog} />;
 }

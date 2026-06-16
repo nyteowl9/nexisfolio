@@ -13,10 +13,11 @@ import {
   fmtUSD,
   fmtPct,
   fmtDate,
+  type Catalog,
   type CardItem,
   type Position,
 } from "@/lib/engine";
-import { CATALOG } from "@/lib/sample/sample-data";
+import { CATALOG as SAMPLE_CATALOG } from "@/lib/sample/sample-data";
 import { CardThumb, GradeLadder } from "@/components/ui/CardThumb";
 import { Area } from "@/components/ui/charts";
 import { ArrowUp, ArrowDown, Plus } from "@/components/ui/icons";
@@ -45,12 +46,12 @@ function recentSales(it: CardItem, unit: number) {
   return out;
 }
 
-function ItemDrawer({ positionId, item, onClose, onChanged }: { positionId: string; item: CardItem; onClose: () => void; onChanged: () => void }) {
-  const meta = itemMeta(item, CATALOG);
-  const unit = itemUnitValue(item, CATALOG), val = itemValue(item, CATALOG), basis = itemBasis(item);
+function ItemDrawer({ positionId, item, catalog, onClose, onChanged }: { positionId: string; item: CardItem; catalog: Catalog; onClose: () => void; onChanged: () => void }) {
+  const meta = itemMeta(item, catalog);
+  const unit = itemUnitValue(item, catalog), val = itemValue(item, catalog), basis = itemBasis(item);
   const pl = val - basis, plPct = basis ? (pl / basis) * 100 : 0;
-  const daily = itemDaily(item, CATALOG);
-  const hist = history(seedOf((item.catId ?? item.id) + (item.grade || "")), unit, 60, item.type === "sealed" ? 0.02 : 0.035);
+  const daily = itemDaily(item, catalog);
+  const hist = history(seedOf((item.catId ?? item.id) + (item.grade || "")), unit || 1, 60, item.type === "sealed" ? 0.02 : 0.035);
   const sales = recentSales(item, unit);
   const ok = ownedKey(item);
   return (
@@ -108,10 +109,10 @@ function ItemDrawer({ positionId, item, onClose, onChanged }: { positionId: stri
   );
 }
 
-function GalleryCell({ item, onOpen }: { item: CardItem; onOpen: (it: CardItem) => void }) {
-  const meta = itemMeta(item, CATALOG);
-  const unit = itemUnitValue(item, CATALOG), val = itemValue(item, CATALOG), basis = itemBasis(item);
-  const pl = val - basis, daily = itemDaily(item, CATALOG);
+function GalleryCell({ item, catalog, onOpen }: { item: CardItem; catalog: Catalog; onOpen: (it: CardItem) => void }) {
+  const meta = itemMeta(item, catalog);
+  const unit = itemUnitValue(item, catalog), val = itemValue(item, catalog), basis = itemBasis(item);
+  const pl = val - basis, daily = itemDaily(item, catalog);
   const [hov, setHov] = useState(false);
   return (
     <div onClick={() => onOpen(item)} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ cursor: "pointer", display: "flex", flexDirection: "column", gap: 9, padding: 12, borderRadius: 12, border: "var(--hair) solid var(--border)", background: hov ? "var(--surface-2)" : "var(--surface)", transition: "background .15s, transform .15s", transform: hov ? "translateY(-2px)" : "none", boxShadow: "var(--shadow)" }}>
@@ -151,25 +152,25 @@ function CompBar({ rows }: { rows: { label: string; color: string; value: number
   );
 }
 
-export function CardsDetail({ position }: { position: Position }) {
+export function CardsDetail({ position, catalog = SAMPLE_CATALOG }: { position: Position; catalog?: Catalog }) {
   const router = useRouter();
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [view, setView] = useState<"gallery" | "list">("gallery");
   const [range, setRange] = useState<"1W" | "1M" | "1Y" | "ALL">("1Y");
   const [catalogOpen, setCatalogOpen] = useState(false);
   const items = position.items ?? [];
-  const value = items.reduce((s, it) => s + itemValue(it, CATALOG), 0);
+  const value = items.reduce((s, it) => s + itemValue(it, catalog), 0);
   const basis = items.reduce((s, it) => s + itemBasis(it), 0);
   const pl = value - basis, plPct = basis ? (pl / basis) * 100 : 0;
   const nCards = items.filter((i) => i.type !== "sealed").reduce((s, i) => s + (i.qty || 1), 0);
   const nSealed = items.filter((i) => i.type === "sealed").reduce((s, i) => s + (i.qty || 1), 0);
-  const daily = value ? items.reduce((s, it) => s + itemDaily(it, CATALOG) * itemValue(it, CATALOG), 0) / value : 0;
+  const daily = value ? items.reduce((s, it) => s + itemDaily(it, catalog) * itemValue(it, catalog), 0) / value : 0;
   const N = { "1W": 8, "1M": 22, "1Y": 60, ALL: 90 }[range] || 60;
   const hist = history(seedOf("collection" + items.length), value || 1, N, 0.022);
   const byType = [
-    { label: "Graded", color: "var(--c-private)", value: items.filter((i) => i.type === "graded").reduce((s, i) => s + itemValue(i, CATALOG), 0) },
-    { label: "Raw", color: "var(--c-crypto)", value: items.filter((i) => i.type === "raw").reduce((s, i) => s + itemValue(i, CATALOG), 0) },
-    { label: "Sealed", color: "var(--c-stocks)", value: items.filter((i) => i.type === "sealed").reduce((s, i) => s + itemValue(i, CATALOG), 0) },
+    { label: "Graded", color: "var(--c-private)", value: items.filter((i) => i.type === "graded").reduce((s, i) => s + itemValue(i, catalog), 0) },
+    { label: "Raw", color: "var(--c-crypto)", value: items.filter((i) => i.type === "raw").reduce((s, i) => s + itemValue(i, catalog), 0) },
+    { label: "Sealed", color: "var(--c-stocks)", value: items.filter((i) => i.type === "sealed").reduce((s, i) => s + itemValue(i, catalog), 0) },
   ].filter((r) => r.value > 0);
   const drawerItem = items.find((x) => x.id === drawerId) || null;
 
@@ -191,7 +192,7 @@ export function CardsDetail({ position }: { position: Position }) {
           </div>
           <div style={{ padding: "8px 14px 16px" }}><Area points={hist} width={640} height={150} color={pl >= 0 ? "var(--pos)" : "var(--neg)"} strokeWidth={2} /></div>
           <div style={{ display: "flex", gap: 18, padding: "0 22px 16px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11.5, color: "var(--ink-3)", display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: 99, background: "var(--pos)" }} />Priced daily · index</span>
+            <span style={{ fontSize: 11.5, color: "var(--ink-3)", display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: 99, background: "var(--pos)" }} />Priced daily · live providers</span>
             <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{nCards} cards · {nSealed} sealed</span>
           </div>
         </div>
@@ -225,10 +226,10 @@ export function CardsDetail({ position }: { position: Position }) {
           </div>
         </div>
         {items.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No cards yet — click &ldquo;Add card or sealed&rdquo; to browse the catalog.</div>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No cards yet — click &ldquo;Add card or sealed&rdquo; to browse the live catalog.</div>
         ) : view === "gallery" ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 14, padding: 18 }}>
-            {items.map((it) => <GalleryCell key={it.id} item={it} onOpen={(x) => setDrawerId(x.id)} />)}
+            {items.map((it) => <GalleryCell key={it.id} item={it} catalog={catalog} onOpen={(x) => setDrawerId(x.id)} />)}
           </div>
         ) : (
           <div>
@@ -236,9 +237,9 @@ export function CardsDetail({ position }: { position: Position }) {
               {["Item", "Unit", "24h", "Value", "Total return"].map((h, i) => <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".04em", textTransform: "uppercase", textAlign: i ? "right" : "left" }}>{h}</span>)}
             </div>
             {items.map((it, i) => {
-              const meta = itemMeta(it, CATALOG);
-              const unit = itemUnitValue(it, CATALOG), val = itemValue(it, CATALOG), b = itemBasis(it);
-              const p = val - b, pp = b ? (p / b) * 100 : 0, dy = itemDaily(it, CATALOG);
+              const meta = itemMeta(it, catalog);
+              const unit = itemUnitValue(it, catalog), val = itemValue(it, catalog), b = itemBasis(it);
+              const p = val - b, pp = b ? (p / b) * 100 : 0, dy = itemDaily(it, catalog);
               return (
                 <div key={it.id} onClick={() => setDrawerId(it.id)} style={{ display: "grid", gridTemplateColumns: "1.8fr 90px 80px 90px 110px", alignItems: "center", gap: 12, padding: "11px 20px", borderTop: i ? "var(--hair) solid var(--border)" : "none", cursor: "pointer" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 13, minWidth: 0 }}>
@@ -259,7 +260,7 @@ export function CardsDetail({ position }: { position: Position }) {
         )}
       </div>
 
-      {drawerItem && <ItemDrawer positionId={position.id} item={drawerItem} onClose={() => setDrawerId(null)} onChanged={() => router.refresh()} />}
+      {drawerItem && <ItemDrawer positionId={position.id} item={drawerItem} catalog={catalog} onClose={() => setDrawerId(null)} onChanged={() => router.refresh()} />}
       {catalogOpen && <CardCatalog positionId={position.id} onClose={() => { setCatalogOpen(false); router.refresh(); }} />}
     </div>
   );

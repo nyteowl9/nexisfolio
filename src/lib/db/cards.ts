@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { recompute, type CardItem } from "@/lib/engine";
-import { CATALOG } from "@/lib/sample/sample-data";
+import { getCatalogFor, upsertProviderCard } from "@/lib/db/catalog";
+import type { ProviderCard } from "@/lib/market/cards-provider";
 
 /** Item payload from the catalog browser / manual form. */
 export interface NewCardItem {
@@ -24,6 +26,8 @@ export interface NewCardItem {
   kind?: string;
   value?: number;
   img?: string | null;
+  /** present when the card came from a live provider (Pokémon/Magic) */
+  provider?: ProviderCard;
 }
 
 function toCardItem(r: Record<string, unknown>): CardItem {
@@ -51,7 +55,8 @@ function toCardItem(r: Record<string, unknown>): CardItem {
 async function recomputePosition(supabase: SupabaseClient, positionId: string, userId: string) {
   const { data } = await supabase.from("card_items").select("*").eq("position_id", positionId);
   const items = ((data ?? []) as Record<string, unknown>[]).map(toCardItem);
-  const agg = recompute(items, CATALOG);
+  const catalog = await getCatalogFor(supabase, items.map((i) => i.catId).filter(Boolean) as string[]);
+  const agg = recompute(items, catalog);
   await supabase
     .from("positions")
     .update({ manual_value: agg.value, cost_basis_manual: agg.basis, qty: agg.qty })
@@ -65,6 +70,11 @@ export async function addCardItem(positionId: string, item: NewCardItem) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return;
+
+  // Live-provider card: sync it into the shared card_catalog so it prices.
+  if (item.provider) {
+    await upsertProviderCard(createAdminClient(), item.provider);
+  }
 
   const row: Record<string, unknown> = {
     user_id: user.id,

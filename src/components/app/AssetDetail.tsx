@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {
   mv, costBasis, change24, fmtUSD, fmtPct, fmtQty, fmtDate, holdYears, isUnitPriced, CLASSES,
-  type Position,
+  type Position, type Catalog,
 } from "@/lib/engine";
 import { Area } from "@/components/ui/charts";
 import { AssetIcon } from "@/components/ui/AssetIcon";
@@ -169,7 +169,7 @@ function LoanDetail({ p }: { p: Position }) {
   );
 }
 
-export function AssetDetail({ position, realized }: { position: Position; realized: number }) {
+export function AssetDetail({ position, realized, catalog }: { position: Position; realized: number; catalog?: Catalog }) {
   const p = position;
   const value = mv(p);
   const isCards = p.cls === "private" && (p.subcat === "Trading Cards" || !!p.items);
@@ -196,7 +196,7 @@ export function AssetDetail({ position, realized }: { position: Position; realiz
           <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{p.cls === "loans" ? "outstanding balance" : "current value"}</div>
         </div>
       </div>
-      {p.cls === "loans" && p.loan ? <LoanDetail p={p} /> : isCards ? <CardsDetail position={p} /> : <MarketDetail p={p} realized={realized} />}
+      {p.cls === "loans" && p.loan ? <LoanDetail p={p} /> : isCards ? <CardsDetail position={p} catalog={catalog} /> : <MarketDetail p={p} realized={realized} />}
     </div>
   );
 }

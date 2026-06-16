@@ -1,15 +1,37 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { priceForGrade, GRADES, fmtUSD, type Grader } from "@/lib/engine";
+import { priceForGrade, GRADES, fmtUSD, type Grader, type CardPrices } from "@/lib/engine";
 import { CARDS, SEALED, SETS, GAMES } from "@/lib/sample/sample-data";
 import { CardThumb, GradeLadder } from "@/components/ui/CardThumb";
 import { Search, Plus, Check } from "@/components/ui/icons";
 import { addCardItem, type NewCardItem } from "@/lib/db/cards";
+import type { ProviderCard } from "@/lib/market/cards-provider";
 
+const LIVE_GAMES = new Set(["pkm", "mtg"]);
 const inputStyle: React.CSSProperties = { width: "100%", padding: "9px 11px", border: "var(--hair) solid var(--border-strong)", borderRadius: 8, fontSize: 13, fontFamily: "var(--font-sans)", background: "var(--surface-2)", color: "var(--ink)", boxSizing: "border-box" };
 
-type Entry = (typeof CARDS)[number] & { kind: "card" } | (typeof SEALED)[number] & { kind: "sealed" };
+interface DisplayEntry {
+  id: string;
+  kind: "card" | "sealed";
+  game: string;
+  name: string;
+  num: string;
+  setCode: string;
+  setName: string;
+  rarity: string;
+  img: string | null;
+  prices?: CardPrices;
+  price?: number;
+  provider?: ProviderCard;
+}
+
+const staticEntries = (type: "all" | "cards" | "sealed"): DisplayEntry[] => {
+  const out: DisplayEntry[] = [];
+  if (type !== "sealed") for (const c of CARDS) out.push({ id: c.id, kind: "card", game: c.game, name: c.name, num: c.num, setCode: SETS[c.set]?.code ?? "", setName: SETS[c.set]?.name ?? "", rarity: c.rarity, img: c.img ?? null, prices: c.prices });
+  if (type !== "cards") for (const s of SEALED) out.push({ id: s.id, kind: "sealed", game: s.game, name: s.name, num: "", setCode: SETS[s.set]?.code ?? "", setName: SETS[s.set]?.name ?? "", rarity: s.kind, img: s.img ?? null, price: s.price });
+  return out;
+};
 
 function Seg<T extends string>({ value, options, onChange }: { value: T; options: ({ value: T; label: string } | T)[]; onChange: (v: T) => void }) {
   return (
@@ -27,23 +49,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label style={{ display: "block" }}><div style={{ fontSize: 11.5, color: "var(--ink-2)", fontWeight: 600, marginBottom: 6 }}>{label}</div>{children}</label>;
 }
 
-function ResultCell({ entry, selected, onPick }: { entry: Entry; selected: boolean; onPick: (e: Entry) => void }) {
+function ResultCell({ entry, selected, onPick }: { entry: DisplayEntry; selected: boolean; onPick: (e: DisplayEntry) => void }) {
   const isCard = entry.kind === "card";
-  const set = SETS[entry.set];
-  const ref = isCard ? entry.prices.raw : entry.price;
+  const ref = isCard ? entry.prices?.raw ?? 0 : entry.price ?? 0;
   const [hov, setHov] = useState(false);
   return (
     <div onClick={() => onPick(entry)} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: 10, borderRadius: 11, border: `1.5px solid ${selected ? "var(--accent)" : "var(--border)"}`, background: hov || selected ? "var(--surface-2)" : "var(--surface)" }}>
-      <CardThumb gameColor={GAMES[entry.game]?.color} name={entry.name} num={isCard ? entry.num : ""} setCode={set?.code} sealed={!isCard} img={entry.img} w={78} />
+      <CardThumb gameColor={GAMES[entry.game]?.color} name={entry.name} num={isCard ? entry.num : ""} setCode={entry.setCode} sealed={!isCard} img={entry.img} w={78} />
       <div style={{ textAlign: "center", minWidth: 0, width: "100%" }}>
         <div style={{ fontSize: 11.5, fontWeight: 650, lineHeight: 1.15, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{entry.name}</div>
-        <div className="num" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3, fontWeight: 600 }}>{isCard ? `from ${fmtUSD(ref, { full: true })}` : fmtUSD(ref, { full: true })}</div>
+        <div className="num" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3, fontWeight: 600 }}>{ref > 0 ? (isCard ? `from ${fmtUSD(ref, { full: true })}` : fmtUSD(ref, { full: true })) : "—"}</div>
       </div>
     </div>
   );
 }
 
-function ConfigPanel({ entry, onAdd }: { entry: Entry | null; onAdd: (i: NewCardItem) => void }) {
+function ConfigPanel({ entry, onAdd }: { entry: DisplayEntry | null; onAdd: (i: NewCardItem) => void }) {
   const isCard = entry?.kind === "card";
   const [type, setType] = useState<"graded" | "raw">("graded");
   const [grader, setGrader] = useState<Grader>("PSA");
@@ -66,40 +87,46 @@ function ConfigPanel({ entry, onAdd }: { entry: Entry | null; onAdd: (i: NewCard
     </div>
   );
 
-  const set = SETS[entry.set];
-  const cardEntry = entry.kind === "card" ? entry : null;
-  const unit = isCard && cardEntry ? (type === "raw" ? cardEntry.prices.raw : priceForGrade(cardEntry.prices, grader, grade)) : (entry as { price: number }).price;
+  const prices = entry.prices;
+  const unit = isCard && prices ? (type === "raw" ? prices.raw : priceForGrade(prices, grader, grade)) : entry.price ?? 0;
   const q = Math.max(1, parseInt(qty) || 1);
   const ok = isCard ? (type === "raw" ? "raw" : (grader === "PSA" ? "psa" : grader === "BGS" ? "bgs" : "cgc") + String(grade).replace(".", "")) : null;
   const badge = !isCard ? "SEALED" : type === "raw" ? "RAW" : `${grader} ${grade}`;
 
-  const submit = () => onAdd({ catId: entry.id, type: isCard ? type : "sealed", grader: isCard && type === "graded" ? grader : null, grade: isCard && type === "graded" ? grade : null, qty: q, basis: parseFloat(basis) || unit, acquired: date });
+  const submit = () => onAdd({
+    catId: entry.id, type: isCard ? type : "sealed",
+    grader: isCard && type === "graded" ? grader : null,
+    grade: isCard && type === "graded" ? grade : null,
+    qty: q, basis: parseFloat(basis) || unit, acquired: date,
+    name: entry.name, game: entry.game, setCode: entry.setCode, setName: entry.setName, num: entry.num, img: entry.img,
+    provider: entry.provider,
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", gap: 14 }}>
-        <CardThumb gameColor={GAMES[entry.game]?.color} name={entry.name} num={isCard ? entry.num : ""} setCode={set?.code} sealed={!isCard} badge={badge} img={entry.img} w={84} />
+        <CardThumb gameColor={GAMES[entry.game]?.color} name={entry.name} num={isCard ? entry.num : ""} setCode={entry.setCode} sealed={!isCard} badge={badge} img={entry.img} w={84} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.2 }}>{entry.name}</div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>{set ? `${set.code} · ${set.name}` : ""}{isCard ? ` · ${entry.num}` : ""}</div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{GAMES[entry.game]?.label} · {entry.kind === "card" ? entry.rarity : entry.kind}</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>{entry.setCode ? `${entry.setCode}${entry.setName ? " · " + entry.setName : ""}` : ""}{isCard && entry.num ? ` · ${entry.num}` : ""}</div>
+          <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{GAMES[entry.game]?.label}{entry.rarity ? ` · ${entry.rarity}` : ""}{entry.provider ? " · live" : ""}</div>
           <div style={{ marginTop: 10 }}>
             <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em" }}>Market value</div>
             <div className="num" style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-.02em", marginTop: 2 }}>{fmtUSD(unit, { full: true })}</div>
           </div>
         </div>
       </div>
-      {isCard && cardEntry && (
+      {isCard && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <Field label="Condition"><Seg value={type} options={[{ value: "graded", label: "Graded" }, { value: "raw", label: "Raw / ungraded" }]} onChange={setType} /></Field>
           {type === "graded" && <Field label="Grader"><Seg value={grader} options={["PSA", "BGS", "CGC"] as Grader[]} onChange={(g) => { setGrader(g); setGrade(GRADES[g][0]); }} /></Field>}
           {type === "graded" && <Field label="Grade"><Seg value={grade} options={GRADES[grader]} onChange={setGrade} /></Field>}
         </div>
       )}
-      {isCard && cardEntry && (
+      {isCard && prices && (
         <div style={{ background: "var(--surface-2)", border: "var(--hair) solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
-          <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 12 }}>Value by grade</div>
-          <GradeLadder prices={cardEntry.prices} ownedKey={type === "raw" ? "raw" : ok} />
+          <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 12 }}>Value by grade {entry.provider ? <span style={{ textTransform: "none", fontWeight: 500 }}>· raw live, graded est.</span> : null}</div>
+          <GradeLadder prices={prices} ownedKey={type === "raw" ? "raw" : ok} />
         </div>
       )}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -119,10 +146,7 @@ function ManualForm({ onAdd, onCancel }: { onAdd: (i: NewCardItem) => void; onCa
   const q = Math.max(1, parseInt(f.qty) || 1);
   const ready = (f.name || "").trim() !== "" && val > 0;
   const badge = f.type === "sealed" ? "SEALED" : f.type === "raw" ? "RAW" : `${f.grader} ${f.grade}`;
-  const submit = () => {
-    if (!ready) return;
-    onAdd({ manual: true, type: f.type as NewCardItem["type"], name: f.name.trim(), game: f.game || null, setCode: f.setCode || "", setName: f.setName || "", num: f.num || "", kind: f.type === "sealed" ? "Sealed product" : "", grader: f.type === "graded" ? f.grader : null, grade: f.type === "graded" ? f.grade : null, value: val, basis: parseFloat(f.basis) || val, qty: q, acquired: f.acquired, img: (f.img || "").trim() || null });
-  };
+  const submit = () => { if (!ready) return; onAdd({ manual: true, type: f.type as NewCardItem["type"], name: f.name.trim(), game: f.game || null, setCode: f.setCode || "", setName: f.setName || "", num: f.num || "", kind: f.type === "sealed" ? "Sealed product" : "", grader: f.type === "graded" ? f.grader : null, grade: f.type === "graded" ? f.grade : null, value: val, basis: parseFloat(f.basis) || val, qty: q, acquired: f.acquired, img: (f.img || "").trim() || null }); };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -164,24 +188,43 @@ function ManualForm({ onAdd, onCancel }: { onAdd: (i: NewCardItem) => void; onCa
 
 export function CardCatalog({ positionId, onClose }: { positionId: string; onClose: () => void }) {
   const [q, setQ] = useState("");
-  const [game, setGame] = useState("all");
+  const [game, setGame] = useState("pkm");
   const [type, setType] = useState<"all" | "cards" | "sealed">("all");
-  const [sel, setSel] = useState<Entry | null>(null);
+  const [sel, setSel] = useState<DisplayEntry | null>(null);
   const [manual, setManual] = useState(false);
   const [added, setAdded] = useState<string[]>([]);
   const [flash, setFlash] = useState(false);
+  const [live, setLive] = useState<DisplayEntry[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const entries: Entry[] = [];
-  if (type !== "sealed") CARDS.forEach((c) => entries.push({ ...c, kind: "card" }));
-  if (type !== "cards") SEALED.forEach((s) => entries.push({ ...s, kind: "sealed" }));
+  const liveGame = LIVE_GAMES.has(game);
+
+  // live provider search (Pokémon / Magic)
+  useEffect(() => {
+    if (!liveGame || q.trim().length < 2) { setLive([]); return; }
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`/api/cards/search?game=${game}&q=${encodeURIComponent(q)}`);
+        const j = await r.json();
+        setLive((j.results as ProviderCard[]).map((p) => ({ id: p.id, kind: "card" as const, game: p.game, name: p.name, num: p.num, setCode: p.setCode, setName: p.setName, rarity: p.rarity, img: p.image, prices: p.prices, provider: p })));
+      } finally { setLoading(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q, game, liveGame]);
+
   const query = q.trim().toLowerCase();
-  const results = entries.filter((en) => {
-    if (game !== "all" && en.game !== game) return false;
-    if (!query) return true;
-    const set = SETS[en.set];
-    const hay = `${en.name} ${en.kind === "card" ? en.num : ""} ${set ? set.code + " " + set.name : ""} ${en.kind === "card" ? en.rarity : ""} ${en.kind}`.toLowerCase();
-    return query.split(/\s+/).every((w) => hay.includes(w));
-  });
+  let results: DisplayEntry[];
+  if (liveGame && query.length >= 2) {
+    results = type === "sealed" ? [] : live;
+  } else {
+    results = staticEntries(type).filter((en) => {
+      if (game !== "all" && en.game !== game) return false;
+      if (!query) return true;
+      const hay = `${en.name} ${en.num} ${en.setCode} ${en.setName} ${en.rarity} ${en.kind}`.toLowerCase();
+      return query.split(/\s+/).every((w) => hay.includes(w));
+    });
+  }
 
   const onAdd = async (item: NewCardItem) => {
     await addCardItem(positionId, item);
@@ -190,7 +233,7 @@ export function CardCatalog({ positionId, onClose }: { positionId: string; onClo
     setSel(null);
   };
 
-  const gameChips = [{ value: "all", label: "All games" }].concat(Object.values(GAMES).map((g) => ({ value: g.key, label: g.label })));
+  const gameChips = [{ value: "all", label: "All games" }].concat(Object.values(GAMES).map((g) => ({ value: g.key, label: g.label + (LIVE_GAMES.has(g.key) ? " ·live" : "") })));
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 75, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -199,7 +242,7 @@ export function CardCatalog({ positionId, onClose }: { positionId: string; onClo
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "var(--hair) solid var(--border)" }}>
           <div>
             <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-.01em" }}>Add to collection</div>
-            <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 2 }}>Browse every card & sealed product, then set its condition</div>
+            <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 2 }}>Pokémon & Magic search the full live catalog (real images + prices)</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {flash && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "var(--pos)", fontWeight: 600 }}><Check size={14} /> Added</span>}
@@ -209,7 +252,7 @@ export function CardCatalog({ positionId, onClose }: { positionId: string; onClo
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 24px", borderBottom: "var(--hair) solid var(--border)", flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
-            <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus placeholder={`Search e.g. "Luffy OP-13", "Charizard", "booster box"…`} style={{ ...inputStyle, paddingLeft: 34 }} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus placeholder={`Search e.g. "Charizard", "Ugin", "Pikachu"…`} style={{ ...inputStyle, paddingLeft: 34 }} />
             <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--ink-3)", display: "flex" }}><Search size={15} /></span>
           </div>
           <Seg value={type} options={[{ value: "all", label: "All" }, { value: "cards", label: "Cards" }, { value: "sealed", label: "Sealed" }]} onChange={setType} />
@@ -220,13 +263,15 @@ export function CardCatalog({ positionId, onClose }: { positionId: string; onClo
         <div className="nw-cat-body" style={{ display: "grid", gridTemplateColumns: "1.55fr 1fr", flex: 1, minHeight: 0 }}>
           <div style={{ overflowY: "auto", padding: 18, borderRight: "var(--hair) solid var(--border)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <span style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600 }}>{results.length} result{results.length === 1 ? "" : "s"}</span>
+              <span style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600 }}>{loading ? "Searching live catalog…" : `${results.length} result${results.length === 1 ? "" : "s"}`}</span>
               <button onClick={() => { setManual(true); setSel(null); }} style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-2)", background: "var(--bg-sunk)", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>Can&apos;t find it? Add manually</button>
             </div>
-            {results.length === 0 ? (
+            {liveGame && query.length < 2 ? (
+              <div style={{ padding: "36px 12px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>Type at least 2 letters to search the full live {GAMES[game]?.label} catalog.</div>
+            ) : results.length === 0 ? (
               <div style={{ padding: "36px 12px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
-                <div>No matches for that search.</div>
-                <button onClick={() => { setManual(true); setSel(null); }} style={{ marginTop: 14, fontSize: 12.5, fontWeight: 650, color: "var(--accent-ink)", background: "var(--accent)", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>+ Add it manually</button>
+                <div>{loading ? "Searching…" : "No matches."}</div>
+                {!loading && <button onClick={() => { setManual(true); setSel(null); }} style={{ marginTop: 14, fontSize: 12.5, fontWeight: 650, color: "var(--accent-ink)", background: "var(--accent)", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>+ Add it manually</button>}
               </div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(118px, 1fr))", gap: 12 }}>
