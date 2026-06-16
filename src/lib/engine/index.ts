@@ -5,6 +5,7 @@
 export * from "./types";
 export * from "./classes";
 export * from "./portfolio";
+export * from "./history";
 export * from "./lots";
 export * from "./tax";
 export * from "./retirement";

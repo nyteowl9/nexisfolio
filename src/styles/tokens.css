@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&display=swap');
+
+/* NEXIS FOLIO — design tokens (ported verbatim from the prototype).
+   Near-monochrome fintech chrome + seven fixed asset-class hues.
+   tabular-nums everywhere, 0.5px hairlines, flat surfaces. */
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* asset-class hues (shared LIGHT/DARK so charts read the same) */
+  --c-crypto:  #E0992B;
+  --c-stocks:  #3E72F0;
+  --c-realest: #14A6A0;
+  --c-private: #9466F0;
+  --c-cash:    #93999F;
+  --c-loans:   #E5689A;
+  --c-metals:  #B5703C;
+
+  --t-crypto:  #F8EFDB;
+  --t-stocks:  #E6EDFD;
+  --t-realest: #DCF1F0;
+  --t-private: #ECE3FD;
+  --t-cash:    #ECEEEF;
+  --t-loans:   #FBE4EE;
+  --t-metals:  #F3E5D9;
+
+  --pos: #0E9D6E;
+  --neg: #E0443E;
+
+  --radius: 10px;
+  --radius-sm: 7px;
+  --hair: 0.5px;
+}
+
+:root, [data-theme="light"] {
+  --bg:        #FAFAFB;
+  --bg-sunk:   #F2F3F4;
+  --surface:   #FFFFFF;
+  --surface-2: #FBFBFC;
+  --border:    #E7E8EA;
+  --border-strong: #D8DADD;
+  --ink:       #15171A;
+  --ink-2:     #5C6168;
+  --ink-3:     #8A9099;
+  --accent:    #15171A;
+  --accent-ink:#FFFFFF;
+  --shadow:    0 1px 2px rgba(20,22,26,.04), 0 1px 3px rgba(20,22,26,.03);
+  --donut-track:#EDEEF0;
+}
+
+[data-theme="dark"] {
+  --bg:        #0D0E10;
+  --bg-sunk:   #090A0B;
+  --surface:   #16181B;
+  --surface-2: #1B1D21;
+  --border:    #26282C;
+  --border-strong: #34373C;
+  --ink:       #F3F4F5;
+  --ink-2:     #A2A8AF;
+  --ink-3:     #6B7178;
+  --accent:    #F3F4F5;
+  --accent-ink:#15171A;
+  --shadow:    0 1px 2px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
+  --donut-track:#26282C;
+
+  --t-crypto:  #3A2E13;
+  --t-stocks:  #182542;
+  --t-realest: #0E322F;
+  --t-private: #281A48;
+  --t-cash:    #26282C;
+  --t-loans:   #3D1E2D;
+  --t-metals:  #3A2517;
+}
+
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "cv01" 1; }
+
+@keyframes allspin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+.nw-nav::-webkit-scrollbar { display: none; }
+@media (max-width: 760px) {
+  .nw-stack-2 { grid-template-columns: 1fr !important; }
+  .nw-page { padding-left: 14px !important; padding-right: 14px !important; padding-top: 20px !important; }
+  .nw-alloc-row { grid-template-columns: 1fr auto !important; gap: 10px !important; }
+  .nw-alloc-row > :nth-child(2), .nw-alloc-row > :nth-child(4) { display: none !important; }
+  .nw-holding { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding-left: 14px !important; padding-right: 14px !important; }
+  .nw-holding > :nth-child(2), .nw-holding > :nth-child(3), .nw-holding > :nth-child(4), .nw-holding > :nth-child(7) { display: none !important; }
+}

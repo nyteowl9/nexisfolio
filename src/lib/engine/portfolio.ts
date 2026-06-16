@@ -90,3 +90,11 @@ export function change24(p: Position): number | null {
   if (p.cls === "cash" && p.prevValue) return ((p.value ?? 0) - p.prevValue) / p.prevValue * 100;
   return null;
 }
+
+/**
+ * 7-day % change. Requires persisted price history (price_cache.change_7d /
+ * net_worth_snapshots), which isn't populated yet — returns null ("—") for now.
+ */
+export function change7d(_p: Position): number | null {
+  return null;
+}
