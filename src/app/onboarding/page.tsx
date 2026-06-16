@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { seedSamplePortfolio } from "@/lib/db/seed";
-import { addWallet, linkSampleBrokerage, removePosition } from "@/lib/db/positions";
+import { addWallet, removePosition } from "@/lib/db/positions";
 import { CLASSES, type AssetClass } from "@/lib/engine";
 import { AddAssetForm } from "./AddAssetForm";
 
@@ -132,24 +132,19 @@ export default async function OnboardingPage({
               </form>
             </div>
 
-            {/* secondary options */}
+            {/* sample + coming soon */}
             <div className={card}>
-              <h3 className="text-sm font-semibold">Other ways to start</h3>
+              <h3 className="text-sm font-semibold">Not sure where to start?</h3>
               <p className="mt-1 mb-3 text-xs text-[#8A9099]">
-                Live brokerage linking (Plaid/SnapTrade) arrives soon — you&apos;ll connect it from
-                your dashboard.
+                Load a complete example portfolio (all seven asset classes) to explore the app. You
+                can clear it and start your own anytime from the dashboard.
               </p>
-              <div className="space-y-2">
-                <form action={linkSampleBrokerage}>
-                  <button className={`${ghostBtn} w-full`}>Load sample brokerage holdings</button>
-                </form>
-                <form action={seedSamplePortfolio}>
-                  <button className={`${ghostBtn} w-full`}>Explore the full sample portfolio</button>
-                </form>
-              </div>
-              <p className="mt-3 text-[11px] text-[#8A9099]">
-                Loaded the sample and want your own? You can wipe it anytime from the dashboard
-                (&ldquo;Start over&rdquo;).
+              <form action={seedSamplePortfolio}>
+                <button className={`${ghostBtn} w-full`}>Explore the sample portfolio</button>
+              </form>
+              <p className="mt-4 border-t border-[#E7E8EA] pt-3 text-[11px] text-[#8A9099]">
+                Brokerage &amp; bank connections (Plaid / SnapTrade) are coming soon — you&apos;ll
+                link them from your dashboard.
               </p>
             </div>
           </div>
