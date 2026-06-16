@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isUnitPriced, type AssetClass } from "@/lib/engine";
 import { priceKey } from "@/lib/db/portfolio";
+import { fetchQuote } from "@/lib/market/quote";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const num = (v: FormDataEntryValue | null): number | undefined => {
@@ -23,6 +24,7 @@ export interface PositionInput {
   cls: AssetClass;
   name: string;
   ticker?: string;
+  providerId?: string;
   account?: string;
   subcat?: string;
   // unit-priced (crypto/stocks/metals)
@@ -39,9 +41,9 @@ export interface PositionInput {
 }
 
 /**
- * Core insert used by every onboarding/add path. Writes the position, a lot
- * (for unit-priced assets), and seeds price_cache so value computes. RLS
- * scopes user rows; price_cache is written with the service role.
+ * Core insert used by every add path. For unit-priced assets, the live price is
+ * fetched server-side (no manual entry) and cached to price_cache. RLS scopes
+ * user rows; price_cache is written with the service role.
  */
 export async function insertPosition(
   supabase: SupabaseClient,
@@ -49,6 +51,18 @@ export async function insertPosition(
   input: PositionInput
 ): Promise<string> {
   const unit = isUnitPriced(input.cls);
+
+  // Resolve a live price for unit-priced assets when one wasn't supplied.
+  let price = input.currentPrice;
+  let prev = input.currentPrice;
+  if (unit && input.ticker && price == null) {
+    const q = await fetchQuote(input.cls, input.ticker, input.providerId);
+    if (q) {
+      price = q.price;
+      prev = q.prev;
+    }
+  }
+
   const base: Record<string, unknown> = {
     user_id: userId,
     cls: input.cls,
@@ -82,18 +96,18 @@ export async function insertPosition(
       user_id: userId,
       position_id: posId,
       qty: input.qty,
-      price: input.costPerUnit ?? input.currentPrice ?? 0,
+      price: input.costPerUnit ?? price ?? 0,
       acquired_date: input.acquiredDate ?? today(),
       account: input.account ?? null,
     });
     if (le) throw new Error(`add lot: ${le.message}`);
 
-    if (input.ticker && input.currentPrice != null) {
+    if (input.ticker && price != null) {
       const admin = createAdminClient();
       const { error: pe } = await admin.from("price_cache").upsert({
         asset_key: priceKey(input.cls, input.ticker),
-        price: input.currentPrice,
-        prev_close: input.currentPrice,
+        price,
+        prev_close: prev ?? price,
       });
       if (pe) throw new Error(`set price: ${pe.message}`);
     }
@@ -117,12 +131,13 @@ export async function addPosition(formData: FormData) {
 
   const cls = String(formData.get("cls") ?? "") as AssetClass;
   const name = str(formData.get("name"));
-  if (!cls || !name) redirect("/onboarding?step=3&error=Name+and+class+required");
+  if (!cls || !name) redirect("/onboarding?error=Name+and+class+required");
 
   await insertPosition(supabase, user.id, {
     cls,
     name: name!,
     ticker: str(formData.get("ticker"))?.toUpperCase(),
+    providerId: str(formData.get("providerId")),
     account: str(formData.get("account")),
     subcat: str(formData.get("subcat")),
     qty: num(formData.get("qty")),
@@ -131,10 +146,12 @@ export async function addPosition(formData: FormData) {
     acquiredDate: str(formData.get("acquiredDate")),
     value: num(formData.get("value")),
     costBasis: num(formData.get("costBasis")),
+    apy: num(formData.get("apy")),
+    isStable: formData.get("isStable") === "on",
   });
 
   revalidatePath("/dashboard");
-  redirect(`/onboarding?step=3&added=${encodeURIComponent(name!)}`);
+  redirect(`/onboarding?added=${encodeURIComponent(name!)}`);
 }
 
 const CHAINS: Record<string, { ticker: string; name: string }> = {
@@ -160,7 +177,7 @@ export async function addWallet(formData: FormData) {
   const address = str(formData.get("address"));
   const chainKey = (str(formData.get("chain")) as keyof typeof CHAINS) || (address ? await detectChain(address) : null);
   if (!address || !chainKey || !CHAINS[chainKey]) {
-    redirect("/onboarding?step=2&error=Enter+a+valid+address+or+pick+a+chain");
+    redirect("/onboarding?error=Enter+a+valid+address+or+pick+a+chain");
   }
   const chain = CHAINS[chainKey!];
 
@@ -170,8 +187,8 @@ export async function addWallet(formData: FormData) {
     ticker: chain.ticker,
     account: `Wallet · ${address!.slice(0, 6)}…${address!.slice(-4)}`,
     qty: num(formData.get("qty")),
-    currentPrice: num(formData.get("currentPrice")),
     costPerUnit: num(formData.get("costPerUnit")),
+    // price auto-fetched live (no manual entry)
   });
 
   await supabase.from("connections").insert({
@@ -185,7 +202,7 @@ export async function addWallet(formData: FormData) {
   });
 
   revalidatePath("/dashboard");
-  redirect(`/onboarding?step=2&added=${encodeURIComponent(chain.ticker + " wallet")}`);
+  redirect(`/onboarding?added=${encodeURIComponent(chain.ticker + " wallet")}`);
 }
 
 /** Server action: mock-link a brokerage by seeding a few sample holdings. */
@@ -194,9 +211,9 @@ export async function linkSampleBrokerage() {
   const user = await requireUser(supabase);
 
   const holdings: PositionInput[] = [
-    { cls: "stocks", ticker: "VTI", name: "Vanguard Total Mkt ETF", account: "Fidelity · 401(k)", qty: 120, currentPrice: 278.3, costPerUnit: 198.4, acquiredDate: "2022-01-03" },
-    { cls: "stocks", ticker: "AAPL", name: "Apple Inc.", account: "Fidelity · Brokerage", qty: 60, currentPrice: 212.4, costPerUnit: 120.0, acquiredDate: "2020-05-20" },
-    { cls: "stocks", ticker: "NVDA", name: "NVIDIA Corp.", account: "Fidelity · Brokerage", qty: 80, currentPrice: 125.1, costPerUnit: 19.8, acquiredDate: "2020-03-23" },
+    { cls: "stocks", ticker: "VTI", name: "Vanguard Total Mkt ETF", account: "Fidelity · 401(k)", qty: 120, costPerUnit: 198.4, acquiredDate: "2022-01-03" },
+    { cls: "stocks", ticker: "AAPL", name: "Apple Inc.", account: "Fidelity · Brokerage", qty: 60, costPerUnit: 120.0, acquiredDate: "2020-05-20" },
+    { cls: "stocks", ticker: "NVDA", name: "NVIDIA Corp.", account: "Fidelity · Brokerage", qty: 80, costPerUnit: 19.8, acquiredDate: "2020-03-23" },
   ];
   for (const h of holdings) await insertPosition(supabase, user.id, h);
 
@@ -211,5 +228,31 @@ export async function linkSampleBrokerage() {
   });
 
   revalidatePath("/dashboard");
-  redirect("/onboarding?step=1&added=Sample+brokerage");
+  redirect("/onboarding?added=Sample+brokerage");
+}
+
+/** Server action: delete one position (cascades lots/items/loans). */
+export async function removePosition(formData: FormData) {
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  const id = str(formData.get("id"));
+  const back = str(formData.get("from")) ?? "/dashboard";
+  if (id) {
+    await supabase.from("positions").delete().eq("id", id).eq("user_id", user.id);
+  }
+  revalidatePath("/dashboard");
+  redirect(back.startsWith("/") ? back : "/dashboard");
+}
+
+/** Server action: wipe the user's whole portfolio so they can start over. */
+export async function clearPortfolio() {
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  // positions cascade to lots/card_items/loans; clear the rest explicitly.
+  await supabase.from("disposals").delete().eq("user_id", user.id);
+  await supabase.from("connections").delete().eq("user_id", user.id);
+  await supabase.from("net_worth_snapshots").delete().eq("user_id", user.id);
+  await supabase.from("positions").delete().eq("user_id", user.id);
+  revalidatePath("/dashboard");
+  redirect("/onboarding?cleared=1");
 }

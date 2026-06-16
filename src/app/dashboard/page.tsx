@@ -5,6 +5,7 @@ import { signOut } from "@/app/login/actions";
 import { totals, fmtUSD, fmtPct } from "@/lib/engine";
 import { getPortfolio } from "@/lib/db/portfolio";
 import { seedSamplePortfolio } from "@/lib/db/seed";
+import { clearPortfolio } from "@/lib/db/positions";
 
 export const metadata = { title: "Dashboard — NEXIS FOLIO" };
 
@@ -87,6 +88,23 @@ export default async function DashboardPage() {
                   </p>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-[#E7E8EA] pt-6">
+              <Link
+                href="/onboarding"
+                className="rounded-full bg-[#15171A] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Add or manage assets
+              </Link>
+              <form action={clearPortfolio}>
+                <button className="rounded-full border border-[#E7E8EA] px-4 py-2 text-sm font-medium text-[#5C6168] transition hover:border-[#E0443E] hover:text-[#E0443E]">
+                  Start over (clear portfolio)
+                </button>
+              </form>
+              <span className="text-xs text-[#8A9099]">
+                Clearing deletes your holdings so you can build your own — your account stays.
+              </span>
             </div>
           </>
         )}
