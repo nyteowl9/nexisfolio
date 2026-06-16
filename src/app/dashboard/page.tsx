@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
 import { totals, fmtUSD, fmtPct } from "@/lib/engine";
 import { getPortfolio } from "@/lib/db/portfolio";
+import { seedSamplePortfolio } from "@/lib/db/seed";
 
 export const metadata = { title: "Dashboard — NEXIS FOLIO" };
 
@@ -44,9 +46,22 @@ export default async function DashboardPage() {
           <div className="rounded-[10px] border border-dashed border-[#E7E8EA] bg-white p-10 text-center">
             <h1 className="text-2xl font-semibold tracking-tight">Welcome to NEXIS FOLIO</h1>
             <p className="mx-auto mt-2 max-w-md text-sm text-[#5C6168]">
-              Your portfolio is empty. Next milestone wires up onboarding — connect a brokerage,
-              add a wallet, add assets by hand, or load the sample portfolio to explore.
+              Your portfolio is empty. Run setup to connect a brokerage, add a wallet, or add assets
+              by hand — or load the full sample portfolio to explore.
             </p>
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <Link
+                href="/onboarding"
+                className="rounded-full bg-[#15171A] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                Set up my portfolio
+              </Link>
+              <form action={seedSamplePortfolio}>
+                <button className="rounded-full border border-[#E7E8EA] px-5 py-2.5 text-sm font-medium text-[#15171A] transition hover:bg-[#F5F5F6]">
+                  Load sample portfolio
+                </button>
+              </form>
+            </div>
             <p className="mt-4 text-xs text-[#8A9099]">
               Signed in as {user.email} · live Postgres + Row-Level Security active.
             </p>
