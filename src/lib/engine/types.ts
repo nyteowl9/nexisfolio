@@ -17,6 +17,8 @@ export type AccountingMethod = "FIFO" | "LIFO" | "HIFO";
 
 /** A single buy: the atomic unit of the cost-basis ledger. */
 export interface Lot {
+  /** DB id (present when loaded from Postgres) */
+  id?: string;
   qty: number;
   price: number;
   /** ISO date (YYYY-MM-DD). */

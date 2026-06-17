@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { netWorthSeries, FLOW_MARKERS, fmtUSD, fmtPct, fmtDate, CLASSES, type Range, type AssetClass } from "@/lib/engine";
+import { netWorthSeries, fmtUSD, fmtPct, fmtDate, CLASSES, type Range, type AssetClass } from "@/lib/engine";
 import { ArrowUp, ArrowDown } from "@/components/ui/icons";
 import { addTransaction, updateTransaction, deleteTransaction } from "@/lib/db/transactions";
 
@@ -37,9 +37,12 @@ const TX_COLORS: Record<string, string> = {
 };
 const txAmount = (t: LedgerTx) => (t.qty != null && t.price != null ? t.qty * t.price : t.amount ?? 0);
 
-function BigChart({ points, markers, color, range }: { points: number[]; markers: { t: number; type: "in" | "out"; amt: number; label: string }[]; color: string; range: Range }) {
+interface TxMarker { t: number; type: "in" | "out"; amt: number; label: string; date: string }
+
+function BigChart({ points, markers, color, range }: { points: number[]; markers: TxMarker[]; color: string; range: Range }) {
   const W = 1100, H = 360, padL = 8, padB = 28;
   const [hover, setHover] = useState<number | null>(null);
+  const [mHover, setMHover] = useState<number | null>(null);
   const min = Math.min(...points), max = Math.max(...points);
   const pad = (max - min) * 0.15 || 1;
   const lo = min - pad, hi = max + pad;
@@ -84,14 +87,11 @@ function BigChart({ points, markers, color, range }: { points: number[]; markers
         <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
         {markers.map((m, i) => {
           const idx = Math.round(m.t * (points.length - 1));
+          const c = m.type === "in" ? "var(--pos)" : "var(--neg)";
           return (
-            <g key={i}>
-              <line x1={x(idx)} x2={x(idx)} y1={y(points[idx])} y2={20} stroke={m.type === "in" ? "var(--pos)" : "var(--neg)"} strokeWidth={1} strokeDasharray="2 3" opacity={0.5} />
-              <circle cx={x(idx)} cy={y(points[idx])} r={4} fill={m.type === "in" ? "var(--pos)" : "var(--neg)"} stroke="var(--surface)" strokeWidth={2} />
-              <g transform={`translate(${Math.min(Math.max(x(idx), 60), W - 60)}, 14)`}>
-                <rect x={-52} y={-11} width={104} height={22} rx={6} fill="var(--surface)" stroke="var(--border)" strokeWidth={0.5} />
-                <text x={0} y={4} textAnchor="middle" fontSize={10.5} fill={m.type === "in" ? "var(--pos)" : "var(--neg)"} fontWeight={600} className="num">{`${m.type === "in" ? "+" : "−"}${fmtUSD(Math.abs(m.amt))} ${m.label}`}</text>
-              </g>
+            <g key={i} onMouseEnter={() => setMHover(i)} onMouseLeave={() => setMHover(null)} style={{ cursor: "pointer" }}>
+              <circle cx={x(idx)} cy={y(points[idx])} r={mHover === i ? 6 : 4} fill={c} stroke="var(--surface)" strokeWidth={2} />
+              <circle cx={x(idx)} cy={y(points[idx])} r={11} fill="transparent" />
             </g>
           );
         })}
@@ -107,6 +107,17 @@ function BigChart({ points, markers, color, range }: { points: number[]; markers
           <span className="num">{fmtUSD(points[hover], { full: true })}</span>
         </div>
       )}
+      {mHover != null && (() => {
+        const m = markers[mHover];
+        const idx = Math.round(m.t * (points.length - 1));
+        return (
+          <div style={{ position: "absolute", left: `${(x(idx) / W) * 100}%`, top: `${(y(points[idx]) / H) * 100}%`, transform: "translate(-50%,-118%)", background: "var(--surface)", border: "var(--hair) solid var(--border-strong)", borderRadius: 9, boxShadow: "var(--shadow)", padding: "8px 11px", pointerEvents: "none", whiteSpace: "nowrap", zIndex: 3 }}>
+            <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600 }}>{fmtDate(m.date).replace(", 2026", "").replace(", 2025", " '25")}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)" }}>{m.label}</div>
+            <div className="num" style={{ fontSize: 12.5, fontWeight: 700, color: m.type === "in" ? "var(--pos)" : "var(--neg)" }}>{m.type === "in" ? "+" : "−"}{fmtUSD(Math.abs(m.amt), { full: true })}</div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -163,7 +174,20 @@ export function HistoryView({ net, transactions }: { net: number; transactions: 
   const [drawer, setDrawer] = useState<LedgerTx | "new" | null>(null);
   const [range, setRange] = useState<Range>("1Y");
   const points = netWorthSeries(net, range);
-  const markers = FLOW_MARKERS[range] || [];
+  // plot the user's real transactions as dots, positioned by date within the range
+  const RANGE_DAYS: Record<Range, number> = { "1D": 1, "1W": 7, "1M": 30, "1Y": 365, ALL: 3650 };
+  const nowMs = Date.now();
+  const startMs = nowMs - RANGE_DAYS[range] * 864e5;
+  const INFLOW = new Set(["sell", "deposit", "dividend", "loan_payment"]);
+  const markers: TxMarker[] = transactions
+    .filter((t) => { const d = new Date(t.tx_date).getTime(); return d >= startMs && d <= nowMs; })
+    .map((t) => ({
+      t: Math.min(1, Math.max(0, (new Date(t.tx_date).getTime() - startMs) / (nowMs - startMs || 1))),
+      type: INFLOW.has(t.type) ? "in" : "out",
+      amt: txAmount(t),
+      label: `${t.type.replace("_", " ")} · ${t.name ?? t.ticker ?? ""}`.trim(),
+      date: t.tx_date,
+    }));
   const first = points[0], last = points[points.length - 1];
   const chg = last - first;
   const chgPct = first ? (chg / first) * 100 : 0;

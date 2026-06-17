@@ -91,7 +91,7 @@ export async function getPortfolio(supabase: SupabaseClient): Promise<Position[]
   const lotsByPos = new Map<string, Lot[]>();
   for (const l of lots) {
     const arr = lotsByPos.get(l.position_id) ?? [];
-    arr.push({ qty: l.qty, price: l.price, date: l.acquired_date, account: l.account ?? undefined, basis: l.basis });
+    arr.push({ id: l.id, qty: l.qty, price: l.price, date: l.acquired_date, account: l.account ?? undefined, basis: l.basis });
     lotsByPos.set(l.position_id, arr);
   }
   const itemsByPos = new Map<string, CardItem[]>();

@@ -1,14 +1,53 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   mv, costBasis, change24, fmtUSD, fmtPct, fmtQty, fmtDate, holdYears, isUnitPriced, CLASSES,
-  type Position, type Catalog,
+  type Position, type Catalog, type Lot,
 } from "@/lib/engine";
 import { Area } from "@/components/ui/charts";
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import { Back, ArrowUp, ArrowDown, Bolt, Clock } from "@/components/ui/icons";
 import { CardsDetail } from "@/components/app/CardsDetail";
+import { addLot, updateLot, deleteLot } from "@/lib/db/lots";
+
+const dInput: React.CSSProperties = { width: "100%", padding: "9px 11px", border: "var(--hair) solid var(--border-strong)", borderRadius: 8, fontSize: 13, fontFamily: "var(--font-sans)", background: "var(--surface-2)", color: "var(--ink)", boxSizing: "border-box" };
+
+function LotDrawer({ positionId, lot, onClose, onSaved }: { positionId: string; lot: Lot | "new"; onClose: () => void; onSaved: () => void }) {
+  const e = lot === "new" ? null : lot;
+  const F = ({ label, children }: { label: string; children: React.ReactNode }) => (<label style={{ display: "block" }}><span style={{ fontSize: 11.5, color: "var(--ink-2)", fontWeight: 600, marginBottom: 6, display: "block" }}>{label}</span>{children}</label>);
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 80 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(10,12,14,.45)" }} />
+      <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: 400, maxWidth: "100%", background: "var(--bg)", borderLeft: "var(--hair) solid var(--border)", boxShadow: "-12px 0 40px rgba(0,0,0,.18)", overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: "var(--hair) solid var(--border)", background: "var(--surface)" }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{e ? "Edit tax lot" : "Add tax lot"}</span>
+          <button onClick={onClose} style={{ background: "var(--bg-sunk)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "var(--ink-2)", fontSize: 15 }}>✕</button>
+        </div>
+        <form action={async (fd) => { if (e) await updateLot(fd); else await addLot(fd); onClose(); onSaved(); }} style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 13 }}>
+          <input type="hidden" name="positionId" value={positionId} />
+          {e?.id && <input type="hidden" name="id" value={e.id} />}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <F label="Quantity"><input name="qty" type="number" step="any" required defaultValue={e?.qty ?? ""} style={dInput} /></F>
+            <F label="Cost per unit"><input name="price" type="number" step="any" required defaultValue={e?.price ?? ""} style={dInput} /></F>
+          </div>
+          <F label="Acquired date"><input name="acquired_date" type="date" defaultValue={e?.date ?? new Date().toISOString().slice(0, 10)} style={dInput} /></F>
+          <F label="Account (optional)"><input name="account" defaultValue={e?.account ?? ""} style={dInput} /></F>
+          <button style={{ padding: 11, background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 9, fontSize: 13.5, fontWeight: 650, cursor: "pointer", fontFamily: "var(--font-sans)" }}>{e ? "Save lot" : "Add lot"}</button>
+        </form>
+        {e?.id && (
+          <form action={async (fd) => { await deleteLot(fd); onClose(); onSaved(); }} style={{ padding: "0 22px 22px" }}>
+            <input type="hidden" name="positionId" value={positionId} />
+            <input type="hidden" name="id" value={e.id} />
+            <button style={{ width: "100%", padding: 10, background: "var(--bg-sunk)", color: "var(--neg)", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-sans)" }}>Delete lot</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const card: React.CSSProperties = { background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden" };
 const cardHead: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 22px", borderBottom: "var(--hair) solid var(--border)", fontSize: 13.5, fontWeight: 600, color: "var(--ink)" };
@@ -33,6 +72,8 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
 }
 
 function MarketDetail({ p, realized }: { p: Position; realized: number }) {
+  const router = useRouter();
+  const [lotDrawer, setLotDrawer] = useState<Lot | "new" | null>(null);
   const value = mv(p), basis = costBasis(p), unreal = value - basis, unrealPct = basis ? (unreal / basis) * 100 : 0;
   const chg = change24(p);
   const unit = isUnitPriced(p.cls);
@@ -63,14 +104,17 @@ function MarketDetail({ p, realized }: { p: Position; realized: number }) {
 
       <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, marginTop: 16, alignItems: "start" }}>
         <div style={card}>
-          <div style={cardHead}>Tax lots <span style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 450 }}>FIFO basis</span></div>
+          <div style={cardHead}>
+            <span>Tax lots <span style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 450 }}>· FIFO basis · click to edit</span></span>
+            <button onClick={() => setLotDrawer("new")} style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", background: "var(--bg-sunk)", border: "var(--hair) solid var(--border)", borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>+ Add lot</button>
+          </div>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead><tr>{["Acquired", "Qty", "Price", "Cost basis", "Holding"].map((h, i) => <th key={i} style={{ textAlign: i > 0 ? "right" : "left", padding: "8px 18px", fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>{h}</th>)}</tr></thead>
             <tbody>
               {lots.map((l, i) => {
                 const ly = holdYears(l.date);
                 return (
-                  <tr key={i}>
+                  <tr key={l.id ?? i} onClick={() => setLotDrawer(l)} style={{ cursor: "pointer" }}>
                     <td style={td()}>{fmtDate(l.date)}</td>
                     <td className="num" style={td(true)}>{fmtQty(l.qty)}</td>
                     <td className="num" style={td(true)}>{fmtUSD(l.price, { full: true, cents: l.price < 1000 })}</td>
@@ -95,6 +139,7 @@ function MarketDetail({ p, realized }: { p: Position; realized: number }) {
           </div>
         </div>
       </div>
+      {lotDrawer && <LotDrawer positionId={p.id} lot={lotDrawer} onClose={() => setLotDrawer(null)} onSaved={() => router.refresh()} />}
     </div>
   );
 }
