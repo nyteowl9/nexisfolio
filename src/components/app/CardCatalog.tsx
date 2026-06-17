@@ -8,7 +8,7 @@ import { Search, Plus, Check } from "@/components/ui/icons";
 import { addCardItem, type NewCardItem } from "@/lib/db/cards";
 import type { ProviderCard } from "@/lib/market/cards-provider";
 
-const LIVE_GAMES = new Set(["pkm", "mtg"]);
+const LIVE_GAMES = new Set(["pkm", "mtg", "op"]);
 const inputStyle: React.CSSProperties = { width: "100%", padding: "9px 11px", border: "var(--hair) solid var(--border-strong)", borderRadius: 8, fontSize: 13, fontFamily: "var(--font-sans)", background: "var(--surface-2)", color: "var(--ink)", boxSizing: "border-box" };
 
 interface DisplayEntry {
@@ -71,12 +71,13 @@ function ConfigPanel({ entry, onAdd }: { entry: DisplayEntry | null; onAdd: (i: 
   const [grade, setGrade] = useState("10");
   const [qty, setQty] = useState("1");
   const [basis, setBasis] = useState("");
+  const [customVal, setCustomVal] = useState("");
   const [date, setDate] = useState("2026-06-15");
 
   useEffect(() => {
     if (!entry) return;
     if (entry.kind === "card") { setType("graded"); setGrader("PSA"); setGrade("10"); }
-    setQty("1"); setBasis("");
+    setQty("1"); setBasis(""); setCustomVal("");
   }, [entry]);
 
   if (!entry) return (
@@ -88,19 +89,32 @@ function ConfigPanel({ entry, onAdd }: { entry: DisplayEntry | null; onAdd: (i: 
   );
 
   const prices = entry.prices;
-  const unit = isCard && prices ? (type === "raw" ? prices.raw : priceForGrade(prices, grader, grade)) : entry.price ?? 0;
+  const unpriced = isCard && (!prices || prices.raw === 0);
+  const unit = unpriced
+    ? parseFloat(customVal) || 0
+    : isCard && prices ? (type === "raw" ? prices.raw : priceForGrade(prices, grader, grade)) : entry.price ?? 0;
   const q = Math.max(1, parseInt(qty) || 1);
   const ok = isCard ? (type === "raw" ? "raw" : (grader === "PSA" ? "psa" : grader === "BGS" ? "bgs" : "cgc") + String(grade).replace(".", "")) : null;
   const badge = !isCard ? "SEALED" : type === "raw" ? "RAW" : `${grader} ${grade}`;
 
-  const submit = () => onAdd({
-    catId: entry.id, type: isCard ? type : "sealed",
-    grader: isCard && type === "graded" ? grader : null,
-    grade: isCard && type === "graded" ? grade : null,
-    qty: q, basis: parseFloat(basis) || unit, acquired: date,
-    name: entry.name, game: entry.game, setCode: entry.setCode, setName: entry.setName, num: entry.num, img: entry.img,
-    provider: entry.provider,
-  });
+  const submit = () =>
+    onAdd(
+      unpriced
+        ? {
+            // no live price → store as a valued item that keeps the real image
+            manual: true, type, grader: type === "graded" ? grader : null, grade: type === "graded" ? grade : null,
+            name: entry.name, game: entry.game, setCode: entry.setCode, setName: entry.setName, num: entry.num, img: entry.img,
+            value: unit, basis: parseFloat(basis) || unit, qty: q, acquired: date,
+          }
+        : {
+            catId: entry.id, type: isCard ? type : "sealed",
+            grader: isCard && type === "graded" ? grader : null,
+            grade: isCard && type === "graded" ? grade : null,
+            qty: q, basis: parseFloat(basis) || unit, acquired: date,
+            name: entry.name, game: entry.game, setCode: entry.setCode, setName: entry.setName, num: entry.num, img: entry.img,
+            provider: entry.provider,
+          }
+    );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -123,7 +137,12 @@ function ConfigPanel({ entry, onAdd }: { entry: DisplayEntry | null; onAdd: (i: 
           {type === "graded" && <Field label="Grade"><Seg value={grade} options={GRADES[grader]} onChange={setGrade} /></Field>}
         </div>
       )}
-      {isCard && prices && (
+      {unpriced && (
+        <Field label="Current value (each)">
+          <input type="number" value={customVal} onChange={(e) => setCustomVal(e.target.value)} placeholder="No live price for this game — enter value" style={inputStyle} />
+        </Field>
+      )}
+      {isCard && prices && !unpriced && (
         <div style={{ background: "var(--surface-2)", border: "var(--hair) solid var(--border)", borderRadius: 10, padding: "14px 16px" }}>
           <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 12 }}>Value by grade {entry.provider ? <span style={{ textTransform: "none", fontWeight: 500 }}>· raw live, graded est.</span> : null}</div>
           <GradeLadder prices={prices} ownedKey={type === "raw" ? "raw" : ok} />

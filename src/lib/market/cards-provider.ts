@@ -118,12 +118,57 @@ async function searchMagic(q: string): Promise<ProviderCard[]> {
   }
 }
 
-/** Games with a wired live provider. Others fall back to the static catalog. */
-export const LIVE_GAMES = new Set(["pkm", "mtg"]);
+// ---- apitcg.com (One Piece, Lorcana): real images, no price feed ----
+interface ApiTcgCard {
+  id?: string;
+  code?: string;
+  name: string;
+  number?: string;
+  rarity?: string;
+  set?: { name?: string; code?: string };
+  images?: { small?: string; large?: string };
+}
+
+async function searchApiTcg(game: "op" | "lor", path: string, q: string): Promise<ProviderCard[]> {
+  const key = process.env.APITCG_API_KEY;
+  if (!key) return [];
+  try {
+    const r = await fetch(`https://www.apitcg.com/api/${path}/cards?name=${encodeURIComponent(q)}`, {
+      headers: { "x-api-key": key },
+      next: { revalidate: 3600 },
+    });
+    if (!r.ok) return [];
+    const j = (await r.json()) as { data?: ApiTcgCard[] };
+    return (j.data ?? []).slice(0, 24).map((c) => {
+      const id = c.id || c.code || c.name;
+      const code = c.code || c.id || "";
+      return {
+        id,
+        game,
+        name: c.name,
+        setCode: c.set?.code || (code.includes("-") ? code.split("-")[0] : ""),
+        setName: c.set?.name || "",
+        num: c.number || code,
+        rarity: c.rarity || "",
+        image: c.images?.large || c.images?.small || null,
+        prices: ladder(0), // no price feed — user supplies value
+        priced: false,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Games with a wired live provider. Others fall back to the static catalog.
+ * (Lorcana isn't available on the current apitcg plan — falls back to sample.) */
+export const LIVE_GAMES = new Set(["pkm", "mtg", "op"]);
 
 export async function searchProviderCards(game: string, q: string): Promise<ProviderCard[]> {
   if (!q.trim()) return [];
   if (game === "pkm") return searchPokemon(q);
   if (game === "mtg") return searchMagic(q);
+  if (game === "op") return searchApiTcg("op", "one-piece", q);
+  if (game === "lor") return searchApiTcg("lor", "lorcana", q);
   return [];
 }
