@@ -131,7 +131,8 @@ export async function addPosition(formData: FormData) {
 
   const cls = String(formData.get("cls") ?? "") as AssetClass;
   const name = str(formData.get("name"));
-  if (!cls || !name) redirect("/onboarding?error=Name+and+class+required");
+  const redirectTo = str(formData.get("redirectTo")) ?? "/onboarding";
+  if (!cls || !name) redirect(`${redirectTo}?error=Name+and+class+required`);
 
   await insertPosition(supabase, user.id, {
     cls,
@@ -151,7 +152,7 @@ export async function addPosition(formData: FormData) {
   });
 
   revalidatePath("/dashboard");
-  redirect(`/onboarding?added=${encodeURIComponent(name!)}`);
+  redirect(`${redirectTo}?added=${encodeURIComponent(name!)}`);
 }
 
 const CHAINS: Record<string, { ticker: string; name: string }> = {

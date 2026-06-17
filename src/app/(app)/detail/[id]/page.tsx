@@ -14,7 +14,7 @@ interface DisposalRow {
   qty: number;
   proceeds: number;
   sold_date: string;
-  lot_snapshot: { lots?: Record<string, number>; acq?: Record<string, string> } | null;
+  lot_snapshot: unknown;
 }
 
 export default async function DetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,16 +39,16 @@ export default async function DetailPage({ params }: { params: Promise<{ id: str
   let realized = 0;
   if (position.ticker && position.ticker !== "—") {
     const { data } = await supabase.from("disposals").select("id,cls,ticker,qty,proceeds,sold_date,lot_snapshot");
-    const disposals: Disposal[] = ((data ?? []) as DisposalRow[]).map((d) => ({
-      id: d.id,
-      cls: d.cls,
-      asset: d.ticker ?? "",
-      qty: d.qty,
-      proceeds: d.proceeds,
-      date: d.sold_date,
-      lots: d.lot_snapshot?.lots as Disposal["lots"],
-      acq: d.lot_snapshot?.acq as Disposal["acq"],
-    }));
+    const disposals: Disposal[] = ((data ?? []) as DisposalRow[]).map((d) => {
+      const snap = d.lot_snapshot;
+      const base = { id: d.id, cls: d.cls, asset: d.ticker ?? "", qty: d.qty, proceeds: d.proceeds, date: d.sold_date };
+      if (Array.isArray(snap)) {
+        // live trade: consumed-lot snapshot → matched per method
+        return { ...base, lotsSnapshot: snap as Disposal["lotsSnapshot"] };
+      }
+      const m = snap as { lots?: Disposal["lots"]; acq?: Disposal["acq"] } | null;
+      return { ...base, lots: m?.lots, acq: m?.acq };
+    });
     realized = taxSummary(disposals, { method: "FIFO" }).rows
       .filter((r) => r.asset === position.ticker)
       .reduce((s, r) => s + r.gain, 0);

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut } from "@/app/login/actions";
 import { Bolt, Search, Sun, Moon, Plus, Menu } from "@/components/ui/icons";
+import { AddTradeModal } from "@/components/app/AddTradeModal";
 
 const TABS: Array<[string, string]> = [
   ["Overview", "/dashboard"],
@@ -20,6 +21,7 @@ const TABS: Array<[string, string]> = [
 export function AppHeader({ email }: { email?: string }) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [navOpen, setNavOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -49,6 +51,7 @@ export function AppHeader({ email }: { email?: string }) {
   };
 
   return (
+    <>
     <header
       style={{
         position: "sticky",
@@ -103,8 +106,8 @@ export function AppHeader({ email }: { email?: string }) {
         <button aria-label="Toggle theme" onClick={toggleTheme} style={iconBtn}>
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
         </button>
-        <Link
-          href="/onboarding"
+        <button
+          onClick={() => setAddOpen(true)}
           style={{
             display: "flex",
             alignItems: "center",
@@ -117,10 +120,12 @@ export function AppHeader({ email }: { email?: string }) {
             fontSize: 13,
             fontWeight: 600,
             whiteSpace: "nowrap",
+            cursor: "pointer",
+            fontFamily: "var(--font-sans)",
           }}
         >
           <Plus size={15} /> Add position
-        </Link>
+        </button>
         <form action={signOut} title="Sign out">
           <button
             style={{
@@ -145,5 +150,7 @@ export function AppHeader({ email }: { email?: string }) {
         <Menu size={18} />
       </button>
     </header>
+    {addOpen && <AddTradeModal onClose={() => setAddOpen(false)} />}
+    </>
   );
 }

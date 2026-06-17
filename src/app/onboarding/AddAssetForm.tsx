@@ -115,7 +115,7 @@ function SymbolSearch({
   );
 }
 
-export function AddAssetForm() {
+export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: string }) {
   const [cls, setCls] = useState<Cls>("crypto");
   const [picked, setPicked] = useState<PickResult | null>(null);
   const [price, setPrice] = useState<number | null>(null);
@@ -157,6 +157,7 @@ export function AddAssetForm() {
   return (
     <form action={addPosition} className="space-y-4">
       <input type="hidden" name="cls" value={cls} />
+      <input type="hidden" name="redirectTo" value={redirectTo} />
 
       {/* class chips */}
       <div className="flex flex-wrap gap-2">

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { netWorthSeries, FLOW_MARKERS, fmtUSD, fmtPct, fmtDate, CLASSES, type Range, type AssetClass } from "@/lib/engine";
 import { ArrowUp, ArrowDown } from "@/components/ui/icons";
+import { addTransaction, updateTransaction, deleteTransaction } from "@/lib/db/transactions";
 
 export interface LedgerTx {
   id: string;
@@ -109,7 +111,56 @@ function BigChart({ points, markers, color, range }: { points: number[]; markers
   );
 }
 
+const TX_TYPES = ["buy", "sell", "deposit", "withdrawal", "dividend", "valuation", "loan_payment", "transfer"];
+const CLS_LIST = ["crypto", "stocks", "metals", "realest", "private", "cash", "loans"];
+const dInput: React.CSSProperties = { width: "100%", padding: "9px 11px", border: "var(--hair) solid var(--border-strong)", borderRadius: 8, fontSize: 13, fontFamily: "var(--font-sans)", background: "var(--surface-2)", color: "var(--ink)", boxSizing: "border-box" };
+const dLabel: React.CSSProperties = { fontSize: 11.5, color: "var(--ink-2)", fontWeight: 600, marginBottom: 6, display: "block" };
+
+function TxDrawer({ tx, onClose, onSaved }: { tx: LedgerTx | "new"; onClose: () => void; onSaved: () => void }) {
+  const e = tx === "new" ? null : tx;
+  const F = ({ label, children }: { label: string; children: React.ReactNode }) => (<label style={{ display: "block" }}><span style={dLabel}>{label}</span>{children}</label>);
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 80 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(10,12,14,.45)" }} />
+      <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: 420, maxWidth: "100%", background: "var(--bg)", borderLeft: "var(--hair) solid var(--border)", boxShadow: "-12px 0 40px rgba(0,0,0,.18)", overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: "var(--hair) solid var(--border)", background: "var(--surface)" }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{e ? "Edit transaction" : "Add transaction"}</span>
+          <button onClick={onClose} style={{ background: "var(--bg-sunk)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "var(--ink-2)", fontSize: 15 }}>✕</button>
+        </div>
+        <form action={async (fd) => { if (e) await updateTransaction(fd); else await addTransaction(fd); onClose(); onSaved(); }} style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 13 }}>
+          {e && <input type="hidden" name="id" value={e.id} />}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <F label="Date"><input name="tx_date" type="date" defaultValue={e?.tx_date ?? new Date().toISOString().slice(0, 10)} style={dInput} /></F>
+            <F label="Type"><select name="type" defaultValue={e?.type ?? "buy"} style={{ ...dInput, cursor: "pointer" }}>{TX_TYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}</select></F>
+          </div>
+          <F label="Name"><input name="name" defaultValue={e?.name ?? ""} placeholder="Bitcoin / HYSA · Marcus" style={dInput} /></F>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <F label="Asset class"><select name="cls" defaultValue={e?.cls ?? "crypto"} style={{ ...dInput, cursor: "pointer" }}>{CLS_LIST.map((c) => <option key={c} value={c}>{c}</option>)}</select></F>
+            <F label="Ticker"><input name="ticker" defaultValue={e?.ticker ?? ""} placeholder="BTC" style={dInput} /></F>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <F label="Qty"><input name="qty" type="number" step="any" defaultValue={e?.qty ?? ""} style={dInput} /></F>
+            <F label="Price"><input name="price" type="number" step="any" defaultValue={e?.price ?? ""} style={dInput} /></F>
+            <F label="Amount"><input name="amount" type="number" step="any" defaultValue={e?.amount ?? ""} style={dInput} /></F>
+          </div>
+          <F label="Account"><input name="account" defaultValue={e?.account ?? ""} style={dInput} /></F>
+          <F label="Note"><input name="note" defaultValue={e?.note ?? ""} style={dInput} /></F>
+          <button style={{ padding: 11, background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 9, fontSize: 13.5, fontWeight: 650, cursor: "pointer", fontFamily: "var(--font-sans)" }}>{e ? "Save changes" : "Add transaction"}</button>
+        </form>
+        {e && (
+          <form action={async (fd) => { await deleteTransaction(fd); onClose(); onSaved(); }} style={{ padding: "0 22px 22px" }}>
+            <input type="hidden" name="id" value={e.id} />
+            <button style={{ width: "100%", padding: 10, background: "var(--bg-sunk)", color: "var(--neg)", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-sans)" }}>Delete transaction</button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function HistoryView({ net, transactions }: { net: number; transactions: LedgerTx[] }) {
+  const router = useRouter();
+  const [drawer, setDrawer] = useState<LedgerTx | "new" | null>(null);
   const [range, setRange] = useState<Range>("1Y");
   const points = netWorthSeries(net, range);
   const markers = FLOW_MARKERS[range] || [];
@@ -153,12 +204,15 @@ export function HistoryView({ net, transactions }: { net: number; transactions: 
 
       {/* transactions ledger */}
       <div style={{ background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden", marginTop: 24 }}>
-        <div style={{ padding: "16px 24px", borderBottom: "var(--hair) solid var(--border)", fontSize: 14, fontWeight: 600 }}>Transactions <span style={{ color: "var(--ink-3)", fontWeight: 450 }}>· {transactions.length}</span></div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: "var(--hair) solid var(--border)" }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>Transactions <span style={{ color: "var(--ink-3)", fontWeight: 450 }}>· {transactions.length}</span></span>
+          <button onClick={() => setDrawer("new")} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)", background: "var(--bg-sunk)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>+ Add transaction</button>
+        </div>
         {transactions.length === 0 ? (
           <div style={{ padding: 36, textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No transactions yet.</div>
         ) : (
           transactions.map((t) => (
-            <div key={t.id} className="nw-tx" style={{ display: "grid", gridTemplateColumns: "92px 110px 1fr 1fr 140px", alignItems: "center", gap: 12, padding: "12px 24px", borderTop: "var(--hair) solid var(--border)" }}>
+            <div key={t.id} onClick={() => setDrawer(t)} className="nw-tx" style={{ display: "grid", gridTemplateColumns: "92px 110px 1fr 1fr 140px", alignItems: "center", gap: 12, padding: "12px 24px", borderTop: "var(--hair) solid var(--border)", cursor: "pointer" }}>
               <span className="num" style={{ fontSize: 12.5, color: "var(--ink-3)" }}>{fmtDate(t.tx_date).replace(", 2026", "").replace(", 2025", " '25")}</span>
               <span style={{ fontSize: 11.5, fontWeight: 600, color: TX_COLORS[t.type] || "var(--ink-2)", textTransform: "capitalize" }}>{t.type.replace("_", " ")}</span>
               <span style={{ fontSize: 13.5, fontWeight: 550, color: "var(--ink)" }}>{t.name}{t.ticker && t.ticker !== "—" ? <span style={{ color: "var(--ink-3)", fontWeight: 450 }}> · {t.ticker}</span> : null}</span>
@@ -168,6 +222,8 @@ export function HistoryView({ net, transactions }: { net: number; transactions: 
           ))
         )}
       </div>
+
+      {drawer && <TxDrawer tx={drawer} onClose={() => setDrawer(null)} onSaved={() => router.refresh()} />}
     </div>
   );
 }
