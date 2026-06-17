@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getPortfolio } from "@/lib/db/portfolio";
 import { getSnapshots } from "@/lib/db/snapshots";
 import { reconstructNetWorth } from "@/lib/db/networth-history";
+import { getLiabilities, debtTotal } from "@/lib/db/liabilities";
 import { totals } from "@/lib/engine";
 import { HistoryView, type LedgerTx } from "@/components/app/HistoryView";
 
@@ -16,8 +17,9 @@ export default async function HistoryPage() {
   if (!user) redirect("/login");
 
   const positions = await getPortfolio(supabase);
-  const net = totals(positions).net;
-  const [recorded, recon] = await Promise.all([getSnapshots(supabase), reconstructNetWorth(supabase, positions)]);
+  const liabilities = await getLiabilities(supabase);
+  const net = totals(positions).net - debtTotal(liabilities);
+  const [recorded, recon] = await Promise.all([getSnapshots(supabase), reconstructNetWorth(supabase, positions, liabilities)]);
   // prefer the reconstructed historical curve (shows real ups/downs); else recorded snapshots
   const snapshots = recon.length >= 2 ? recon : recorded;
   const { data } = await supabase

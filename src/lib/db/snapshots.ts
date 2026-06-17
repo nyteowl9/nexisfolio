@@ -4,12 +4,12 @@ import type { Totals } from "@/lib/engine";
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** Record (upsert) today's net-worth snapshot so history accrues over time. */
-export async function recordSnapshot(supabase: SupabaseClient, userId: string, t: Totals) {
+export async function recordSnapshot(supabase: SupabaseClient, userId: string, t: Totals, debt = 0) {
   if (t.net <= 0) return;
   await supabase.from("net_worth_snapshots").upsert({
     user_id: userId,
     snap_date: today(),
-    net_worth: Math.round(t.net),
+    net_worth: Math.round(t.net - debt),
     liquid: Math.round(t.liquid),
     illiquid: Math.round(t.illiquid),
     loans_out: Math.round(t.loansOut),

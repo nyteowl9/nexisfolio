@@ -7,8 +7,10 @@ import { getPortfolio } from "@/lib/db/portfolio";
 import { recordSnapshot } from "@/lib/db/snapshots";
 import { refreshStalePrices } from "@/lib/db/refresh";
 import { reconstructNetWorth } from "@/lib/db/networth-history";
+import { getLiabilities, debtTotal } from "@/lib/db/liabilities";
 import { totals } from "@/lib/engine";
 import { Overview } from "@/components/app/Overview";
+import { LiabilitiesCard } from "@/components/app/LiabilitiesCard";
 
 export const metadata = { title: "Dashboard — NEXIS FOLIO" };
 
@@ -21,8 +23,10 @@ export default async function DashboardPage() {
 
   await refreshStalePrices();
   const positions = await getPortfolio(supabase);
-  const hasData = positions.length > 0;
-  if (hasData) await recordSnapshot(supabase, user.id, totals(positions));
+  const liabilities = await getLiabilities(supabase);
+  const debt = debtTotal(liabilities);
+  const hasData = positions.length > 0 || liabilities.length > 0;
+  if (positions.length > 0) await recordSnapshot(supabase, user.id, totals(positions), debt);
 
   if (!hasData) {
     return (
@@ -48,11 +52,12 @@ export default async function DashboardPage() {
     );
   }
 
-  const history = await reconstructNetWorth(supabase, positions);
+  const history = await reconstructNetWorth(supabase, positions, liabilities);
 
   return (
     <>
-      <Overview positions={positions} history={history} />
+      <Overview positions={positions} history={history} debt={debt} />
+      <LiabilitiesCard liabilities={liabilities} positions={positions} />
       <div className="nw-page" style={{ maxWidth: 1240, margin: "0 auto", padding: "0 36px 56px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <Link href="/onboarding" style={{ background: "var(--surface)", color: "var(--ink)", border: "var(--hair) solid var(--border)", padding: "8px 16px", borderRadius: 999, fontSize: 13, fontWeight: 500 }}>
           Add or manage assets

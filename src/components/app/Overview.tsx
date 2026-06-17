@@ -36,11 +36,11 @@ const card: React.CSSProperties = {
 const dateShort = (s?: string) =>
   s ? fmtDate(s).replace(", 2026", "").replace(", 2025", " '25") : "";
 
-function MetricCard({ label, value, sub, subColor }: { label: string; value: string; sub?: string; subColor?: string }) {
+function MetricCard({ label, value, sub, subColor, valueColor }: { label: string; value: string; sub?: string; subColor?: string; valueColor?: string }) {
   return (
     <div style={{ ...card, flex: 1, minWidth: 150, padding: "17px 19px" }}>
       <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 500, marginBottom: 11 }}>{label}</div>
-      <div className="num" style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-.02em", color: "var(--ink)" }}>{value}</div>
+      <div className="num" style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-.02em", color: valueColor || "var(--ink)" }}>{value}</div>
       {sub && <div className="num" style={{ fontSize: 12.5, color: subColor || "var(--ink-2)", marginTop: 6, fontWeight: 500 }}>{sub}</div>}
     </div>
   );
@@ -133,12 +133,13 @@ function UpdatePricesBtn() {
 
 const SPARK_DAYS: Record<Range, number> = { "1D": 1, "1W": 7, "1M": 30, "1Y": 365, ALL: 99999 };
 
-export function Overview({ positions, history }: { positions: Position[]; history?: { date: string; net: number }[] }) {
+export function Overview({ positions, history, debt = 0 }: { positions: Position[]; history?: { date: string; net: number }[]; debt?: number }) {
   const { prefs } = usePrefs();
   const useBars = prefs.allocChart === "bars";
   const [active, setActive] = useState<AssetClass | null>(null);
   const [range, setRange] = useState<Range>("1W");
   const t = totals(positions);
+  const netWorth = t.net - debt;
   const cls = t.classes;
   const donutData = (Object.values(cls) as (typeof cls)[AssetClass][])
     .filter((c) => c.value > 0)
@@ -162,7 +163,7 @@ export function Overview({ positions, history }: { positions: Position[]; histor
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 20 }}>
         <div>
           <div style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 500, marginBottom: 8 }}>Total net worth</div>
-          <div className="num" style={{ fontSize: 52, fontWeight: 650, letterSpacing: "-.035em", lineHeight: 1, color: "var(--ink)" }}>{fmtUSD(t.net, { full: true })}</div>
+          <div className="num" style={{ fontSize: 52, fontWeight: 650, letterSpacing: "-.035em", lineHeight: 1, color: "var(--ink)" }}>{fmtUSD(netWorth, { full: true })}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
             <span className="num" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 15, fontWeight: 600, color: t.change24 >= 0 ? "var(--pos)" : "var(--neg)" }}>
               {t.change24 >= 0 ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
@@ -198,6 +199,7 @@ export function Overview({ positions, history }: { positions: Position[]; histor
         <MetricCard label="Illiquid" value={fmtUSD(t.illiquid)} sub={`${t.net ? ((t.illiquid / t.net) * 100).toFixed(0) : 0}% of net worth`} />
         <MetricCard label="Loans out" value={fmtUSD(t.loansOut)} sub={`${cls.loans.count} active note${cls.loans.count === 1 ? "" : "s"}`} />
         <MetricCard label="Cost basis" value={fmtUSD(t.basis)} sub="total invested" />
+        {debt > 0 && <MetricCard label="Debt" value={"−" + fmtUSD(debt)} valueColor="var(--neg)" sub="owed" subColor="var(--neg)" />}
         <MetricCard label="Total P / L" value={(t.pl >= 0 ? "+" : "−") + fmtUSD(Math.abs(t.pl))} sub={fmtPct(t.plPct, true)} subColor={t.pl >= 0 ? "var(--pos)" : "var(--neg)"} />
       </div>
 

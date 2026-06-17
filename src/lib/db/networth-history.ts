@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isUnitPriced, mv, type AssetClass, type Position } from "@/lib/engine";
 import { fetchPriceSeriesDated } from "@/lib/market/history";
+import type { Liability } from "@/lib/db/liabilities";
 
 const DAY = 864e5;
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -23,7 +24,7 @@ export interface NetPoint {
  * metals) show true volatility; manual assets are held flat at current value
  * from their acquisition date. Capped to ~2 years for performance.
  */
-export async function reconstructNetWorth(supabase: SupabaseClient, positions: Position[]): Promise<NetPoint[]> {
+export async function reconstructNetWorth(supabase: SupabaseClient, positions: Position[], liabilities: Liability[] = []): Promise<NetPoint[]> {
   const market = positions.filter((p) => isUnitPriced(p.cls) && p.ticker && p.ticker !== "—" && (p.lots?.length ?? 0) > 0);
 
   const dates: number[] = [];
@@ -84,6 +85,11 @@ export async function reconstructNetWorth(supabase: SupabaseClient, positions: P
       net += Math.max(0, qty) * (priceByPos[p.id]?.[i] ?? 0);
     }
     for (const p of manual) if (manualEarliest[p.id] <= dMs) net += mv(p);
+    // subtract debt owed (from origination date; balance held flat)
+    for (const l of liabilities) {
+      const since = l.originated ? new Date(l.originated).getTime() : startMs;
+      if (since <= dMs) net -= l.balance || 0;
+    }
     out.push({ date: iso(dMs), net: Math.round(net) });
   }
   return out;
