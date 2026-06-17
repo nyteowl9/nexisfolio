@@ -14,7 +14,7 @@ export interface Quote {
 const YH_HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; NexisFolio/1.0)" };
 
 /** Resolve a CoinGecko coin id from a symbol (used when no providerId given). */
-async function resolveCoinId(symbol: string): Promise<string | null> {
+export async function resolveCoinId(symbol: string): Promise<string | null> {
   try {
     const r = await fetch(
       `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`,

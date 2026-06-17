@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPortfolio } from "@/lib/db/portfolio";
 import { getCatalogFor } from "@/lib/db/catalog";
-import { taxSummary, type AssetClass, type Catalog, type Disposal } from "@/lib/engine";
+import { fetchPriceHistory } from "@/lib/market/history";
+import { isUnitPriced, taxSummary, type AssetClass, type Catalog, type Disposal } from "@/lib/engine";
 import { AssetDetail } from "@/components/app/AssetDetail";
 
 export const metadata = { title: "Asset — NEXIS FOLIO" };
@@ -55,5 +56,11 @@ export default async function DetailPage({ params, searchParams }: { params: Pro
       .reduce((s, r) => s + r.gain, 0);
   }
 
-  return <AssetDetail position={position} realized={realized} catalog={catalog} autoOpenCatalog={addcards === "1"} />;
+  // Real historical price line for market holdings.
+  let priceHistory: number[] | null = null;
+  if (isUnitPriced(position.cls) && position.ticker && position.ticker !== "—") {
+    priceHistory = await fetchPriceHistory(position.cls, position.ticker);
+  }
+
+  return <AssetDetail position={position} realized={realized} catalog={catalog} autoOpenCatalog={addcards === "1"} priceHistory={priceHistory} />;
 }

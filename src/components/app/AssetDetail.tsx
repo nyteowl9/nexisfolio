@@ -71,13 +71,13 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
   );
 }
 
-function MarketDetail({ p, realized }: { p: Position; realized: number }) {
+function MarketDetail({ p, realized, priceHistory }: { p: Position; realized: number; priceHistory?: number[] | null }) {
   const router = useRouter();
   const [lotDrawer, setLotDrawer] = useState<Lot | "new" | null>(null);
   const value = mv(p), basis = costBasis(p), unreal = value - basis, unrealPct = basis ? (unreal / basis) * 100 : 0;
   const chg = change24(p);
   const unit = isUnitPriced(p.cls);
-  const hist = genPriceHistory(unit ? p.price ?? value : value / (p.qty || 1));
+  const hist = priceHistory && priceHistory.length > 2 ? priceHistory : genPriceHistory(unit ? p.price ?? value : value / (p.qty || 1));
   const lots = p.lots ?? [];
   const oldest = lots.length ? lots.reduce((a, b) => (new Date(a.date) < new Date(b.date) ? a : b)) : null;
   const holdY = oldest ? holdYears(oldest.date) : 0;
@@ -214,7 +214,7 @@ function LoanDetail({ p }: { p: Position }) {
   );
 }
 
-export function AssetDetail({ position, realized, catalog, autoOpenCatalog }: { position: Position; realized: number; catalog?: Catalog; autoOpenCatalog?: boolean }) {
+export function AssetDetail({ position, realized, catalog, autoOpenCatalog, priceHistory }: { position: Position; realized: number; catalog?: Catalog; autoOpenCatalog?: boolean; priceHistory?: number[] | null }) {
   const p = position;
   const value = mv(p);
   const isCards = p.cls === "private" && (p.subcat === "Trading Cards" || !!p.items);
@@ -241,7 +241,7 @@ export function AssetDetail({ position, realized, catalog, autoOpenCatalog }: { 
           <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{p.cls === "loans" ? "outstanding balance" : "current value"}</div>
         </div>
       </div>
-      {p.cls === "loans" && p.loan ? <LoanDetail p={p} /> : isCards ? <CardsDetail position={p} catalog={catalog} autoOpenCatalog={autoOpenCatalog} /> : <MarketDetail p={p} realized={realized} />}
+      {p.cls === "loans" && p.loan ? <LoanDetail p={p} /> : isCards ? <CardsDetail position={p} catalog={catalog} autoOpenCatalog={autoOpenCatalog} /> : <MarketDetail p={p} realized={realized} priceHistory={priceHistory} />}
     </div>
   );
 }
