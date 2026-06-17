@@ -152,12 +152,12 @@ function CompBar({ rows }: { rows: { label: string; color: string; value: number
   );
 }
 
-export function CardsDetail({ position, catalog = SAMPLE_CATALOG }: { position: Position; catalog?: Catalog }) {
+export function CardsDetail({ position, catalog = SAMPLE_CATALOG, autoOpenCatalog }: { position: Position; catalog?: Catalog; autoOpenCatalog?: boolean }) {
   const router = useRouter();
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [view, setView] = useState<"gallery" | "list">("gallery");
   const [range, setRange] = useState<"1W" | "1M" | "1Y" | "ALL">("1Y");
-  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(!!autoOpenCatalog);
   const items = position.items ?? [];
   const value = items.reduce((s, it) => s + itemValue(it, catalog), 0);
   const basis = items.reduce((s, it) => s + itemBasis(it), 0);

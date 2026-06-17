@@ -17,8 +17,9 @@ interface DisposalRow {
   lot_snapshot: unknown;
 }
 
-export default async function DetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ addcards?: string }> }) {
   const { id } = await params;
+  const { addcards } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -54,5 +55,5 @@ export default async function DetailPage({ params }: { params: Promise<{ id: str
       .reduce((s, r) => s + r.gain, 0);
   }
 
-  return <AssetDetail position={position} realized={realized} catalog={catalog} />;
+  return <AssetDetail position={position} realized={realized} catalog={catalog} autoOpenCatalog={addcards === "1"} />;
 }

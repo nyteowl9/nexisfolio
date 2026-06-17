@@ -169,7 +169,7 @@ function LoanDetail({ p }: { p: Position }) {
   );
 }
 
-export function AssetDetail({ position, realized, catalog }: { position: Position; realized: number; catalog?: Catalog }) {
+export function AssetDetail({ position, realized, catalog, autoOpenCatalog }: { position: Position; realized: number; catalog?: Catalog; autoOpenCatalog?: boolean }) {
   const p = position;
   const value = mv(p);
   const isCards = p.cls === "private" && (p.subcat === "Trading Cards" || !!p.items);
@@ -196,7 +196,7 @@ export function AssetDetail({ position, realized, catalog }: { position: Positio
           <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{p.cls === "loans" ? "outstanding balance" : "current value"}</div>
         </div>
       </div>
-      {p.cls === "loans" && p.loan ? <LoanDetail p={p} /> : isCards ? <CardsDetail position={p} catalog={catalog} /> : <MarketDetail p={p} realized={realized} />}
+      {p.cls === "loans" && p.loan ? <LoanDetail p={p} /> : isCards ? <CardsDetail position={p} catalog={catalog} autoOpenCatalog={autoOpenCatalog} /> : <MarketDetail p={p} realized={realized} />}
     </div>
   );
 }

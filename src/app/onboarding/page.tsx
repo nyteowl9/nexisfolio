@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { seedSamplePortfolio } from "@/lib/db/seed";
-import { addWallet, removePosition } from "@/lib/db/positions";
+import { addWallet, removePosition, browseCardCatalog } from "@/lib/db/positions";
 import { CLASSES, type AssetClass } from "@/lib/engine";
 import { AddAssetForm } from "./AddAssetForm";
 
@@ -114,6 +114,18 @@ export default async function OnboardingPage({
               >
                 {n > 0 ? `Enter with my ${n} asset${n === 1 ? "" : "s"}` : "Go to dashboard"}
               </Link>
+            </div>
+
+            {/* trading cards catalog */}
+            <div className={card}>
+              <h3 className="text-sm font-semibold">Collect trading cards?</h3>
+              <p className="mt-1 mb-3 text-xs text-[#8A9099]">
+                Browse the live catalog (Pokémon, Magic, One Piece) — real card images, pick the
+                grade, and it prices automatically.
+              </p>
+              <form action={browseCardCatalog}>
+                <button className={`${ghostBtn} w-full`}>Browse card catalog →</button>
+              </form>
             </div>
 
             {/* quick wallet add */}

@@ -245,6 +245,33 @@ export async function removePosition(formData: FormData) {
   redirect(back.startsWith("/") ? back : "/dashboard");
 }
 
+/** Server action: ensure a Trading Cards position exists, then open its catalog. */
+export async function browseCardCatalog() {
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+
+  const { data: existing } = await supabase
+    .from("positions")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("cls", "private")
+    .eq("subcat", "Trading Cards")
+    .limit(1);
+
+  let id = existing?.[0]?.id as string | undefined;
+  if (!id) {
+    const { data, error } = await supabase
+      .from("positions")
+      .insert({ user_id: user.id, cls: "private", subcat: "Trading Cards", name: "Trading Cards", is_live: false, manual_value: 0, cost_basis_manual: 0, account: "Collection" })
+      .select("id")
+      .single();
+    if (error) throw new Error(`create cards position: ${error.message}`);
+    id = data.id as string;
+  }
+  revalidatePath("/dashboard");
+  redirect(`/detail/${id}?addcards=1`);
+}
+
 /** Server action: wipe the user's whole portfolio so they can start over. */
 export async function clearPortfolio() {
   const supabase = await createClient();
