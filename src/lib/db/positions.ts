@@ -294,9 +294,14 @@ export async function removePosition(formData: FormData) {
   const id = str(formData.get("id"));
   const back = str(formData.get("from")) ?? "/dashboard";
   if (id) {
+    // remove the position's ledger entries + disposals, then the position
+    // (lots / card_items / loans cascade automatically)
+    await supabase.from("transactions").delete().eq("position_id", id).eq("user_id", user.id);
+    await supabase.from("disposals").delete().eq("position_id", id).eq("user_id", user.id);
     await supabase.from("positions").delete().eq("id", id).eq("user_id", user.id);
   }
   revalidatePath("/dashboard");
+  revalidatePath("/history");
   redirect(back.startsWith("/") ? back : "/dashboard");
 }
 
@@ -332,10 +337,13 @@ export async function clearPortfolio() {
   const supabase = await createClient();
   const user = await requireUser(supabase);
   // positions cascade to lots/card_items/loans; clear the rest explicitly.
+  await supabase.from("transactions").delete().eq("user_id", user.id);
   await supabase.from("disposals").delete().eq("user_id", user.id);
   await supabase.from("connections").delete().eq("user_id", user.id);
   await supabase.from("net_worth_snapshots").delete().eq("user_id", user.id);
+  await supabase.from("liabilities").delete().eq("user_id", user.id);
   await supabase.from("positions").delete().eq("user_id", user.id);
   revalidatePath("/dashboard");
+  revalidatePath("/history");
   redirect("/onboarding?cleared=1");
 }

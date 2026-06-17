@@ -12,6 +12,7 @@ import { AssetIcon } from "@/components/ui/AssetIcon";
 import { Back, ArrowUp, ArrowDown, Bolt, Clock } from "@/components/ui/icons";
 import { CardsDetail } from "@/components/app/CardsDetail";
 import { addLot, updateLot, deleteLot } from "@/lib/db/lots";
+import { removePosition } from "@/lib/db/positions";
 
 const dInput: React.CSSProperties = { width: "100%", padding: "9px 11px", border: "var(--hair) solid var(--border-strong)", borderRadius: 8, fontSize: 13, fontFamily: "var(--font-sans)", background: "var(--surface-2)", color: "var(--ink)", boxSizing: "border-box" };
 
@@ -220,7 +221,19 @@ export function AssetDetail({ position, realized, catalog, autoOpenCatalog, pric
   const isCards = p.cls === "private" && (p.subcat === "Trading Cards" || !!p.items);
   return (
     <div className="nw-page" style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 36px 64px" }}>
-      <Link href="/dashboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--ink-3)", fontSize: 13, fontWeight: 500, padding: "4px 0", marginBottom: 16 }}><Back size={16} /> Back to overview</Link>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <Link href="/dashboard" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--ink-3)", fontSize: 13, fontWeight: 500, padding: "4px 0" }}><Back size={16} /> Back to overview</Link>
+        <form action={removePosition}>
+          <input type="hidden" name="id" value={p.id} />
+          <input type="hidden" name="from" value="/dashboard" />
+          <button
+            onClick={(e) => { if (!confirm(`Delete ${p.name}? This removes the position and its history.`)) e.preventDefault(); }}
+            style={{ fontSize: 12.5, fontWeight: 600, color: "var(--neg)", background: "transparent", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}
+          >
+            Delete position
+          </button>
+        </form>
+      </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <AssetIcon cls={p.cls} ticker={p.ticker} name={p.name} size={52} radius={12} />

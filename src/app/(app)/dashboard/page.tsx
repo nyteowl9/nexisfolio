@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { seedSamplePortfolio } from "@/lib/db/seed";
-import { clearPortfolio } from "@/lib/db/positions";
 import { getPortfolio } from "@/lib/db/portfolio";
+import { ClearPortfolioButton } from "@/components/app/ClearPortfolioButton";
 import { recordSnapshot } from "@/lib/db/snapshots";
 import { refreshStalePrices } from "@/lib/db/refresh";
 import { reconstructNetWorth } from "@/lib/db/networth-history";
@@ -62,11 +62,7 @@ export default async function DashboardPage() {
         <Link href="/onboarding" style={{ background: "var(--surface)", color: "var(--ink)", border: "var(--hair) solid var(--border)", padding: "8px 16px", borderRadius: 999, fontSize: 13, fontWeight: 500 }}>
           Add or manage assets
         </Link>
-        <form action={clearPortfolio}>
-          <button style={{ background: "transparent", color: "var(--ink-3)", border: "var(--hair) solid var(--border)", padding: "8px 16px", borderRadius: 999, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "var(--font-sans)" }}>
-            Start over (clear portfolio)
-          </button>
-        </form>
+        <ClearPortfolioButton />
         <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Clearing deletes your holdings so you can build your own — your account stays.</span>
       </div>
     </>
