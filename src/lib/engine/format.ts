@@ -34,12 +34,17 @@ export function fmtQty(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: n < 10 ? 4 : 2 });
 }
 
+/** Parse a date string; treat YYYY-MM-DD as a LOCAL date (avoids UTC off-by-one). */
+function parseDate(s: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + "T00:00:00") : new Date(s);
+}
+
 /** Holding period in years between a date and `now` (defaults to today). */
 export function holdYears(dateStr: string, now: Date = new Date()): number {
-  const d = new Date(dateStr);
+  const d = parseDate(dateStr);
   return (now.getTime() - d.getTime()) / (365.25 * MS_PER_DAY);
 }
 
 export function fmtDate(s: string): string {
-  return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return parseDate(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }

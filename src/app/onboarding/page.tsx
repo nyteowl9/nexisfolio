@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { seedSamplePortfolio } from "@/lib/db/seed";
 import { addWallet, removePosition, browseCardCatalog } from "@/lib/db/positions";
 import { CLASSES, type AssetClass } from "@/lib/engine";
-import { AddAssetForm } from "./AddAssetForm";
+import { AddAssetSection } from "./AddAssetSection";
 
 export const metadata = { title: "Get started — NEXIS FOLIO" };
 
@@ -70,7 +70,7 @@ export default async function OnboardingPage({
               Pick a coin, stock, or metal and the live price fills in automatically — or add real
               estate, collectibles, cash, or loans by value.
             </p>
-            <AddAssetForm />
+            <AddAssetSection />
           </div>
 
           {/* aside */}

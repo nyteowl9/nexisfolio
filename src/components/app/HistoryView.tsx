@@ -23,13 +23,12 @@ export interface LedgerTx {
 }
 
 const RANGE_LABEL: Record<Range, string> = { "1D": "today", "1W": "past week", "1M": "past month", "1Y": "past year", ALL: "all time" };
-const RANGE_OVER: Record<Range, string> = { "1D": "1 day", "1W": "1 week", "1M": "1 month", "1Y": "1 year", ALL: "9 years" };
-const X_LABELS: Record<Range, string[]> = {
-  "1D": ["9:30", "11", "1", "3", "4:00"],
-  "1W": ["Mon", "Tue", "Wed", "Thu", "Fri"],
-  "1M": ["Wk 1", "Wk 2", "Wk 3", "Wk 4"],
-  "1Y": ["Jul", "Sep", "Nov", "Jan", "Mar", "May"],
-  ALL: ["2017", "2019", "2021", "2023", "2025", "Now"],
+const RANGE_DAYS: Record<Range, number> = { "1D": 1, "1W": 7, "1M": 30, "1Y": 365, ALL: 100000 };
+const DAYMS = 864e5;
+const parseLocal = (s: string) => new Date(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + "T00:00:00" : s);
+const isoLocal = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
 const TX_COLORS: Record<string, string> = {
@@ -40,7 +39,7 @@ const txAmount = (t: LedgerTx) => (t.qty != null && t.price != null ? t.qty * t.
 
 interface TxMarker { t: number; type: "in" | "out"; amt: number; label: string; date: string }
 
-function BigChart({ points, markers, color, range }: { points: number[]; markers: TxMarker[]; color: string; range: Range }) {
+function BigChart({ points, markers, color, dates }: { points: number[]; markers: TxMarker[]; color: string; dates: string[] }) {
   const W = 1100, H = 360, padL = 8, padB = 28;
   const [hover, setHover] = useState<number | null>(null);
   const [mHover, setMHover] = useState<number | null>(null);
@@ -53,7 +52,16 @@ function BigChart({ points, markers, color, range }: { points: number[]; markers
   const area = `${line} L${x(points.length - 1)} ${H - padB} L${padL} ${H - padB} Z`;
   const ticks = 4;
   const gl = Array.from({ length: ticks + 1 }, (_, i) => lo + (hi - lo) * (i / ticks));
-  const xlabels = X_LABELS[range] || [];
+  // x-axis labels derived from the REAL dates of the series
+  const spanDays = dates.length > 1 ? (parseLocal(dates[dates.length - 1]).getTime() - parseLocal(dates[0]).getTime()) / DAYMS : 0;
+  const fmtTick = (s: string) => {
+    const d = parseLocal(s);
+    if (spanDays > 700) return String(d.getFullYear());
+    if (spanDays > 80) return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+  const tickCount = Math.min(6, dates.length);
+  const tickIdx = Array.from({ length: tickCount }, (_, i) => Math.round((i / Math.max(1, tickCount - 1)) * (dates.length - 1)));
 
   return (
     <div style={{ position: "relative" }}>
@@ -81,8 +89,8 @@ function BigChart({ points, markers, color, range }: { points: number[]; markers
             <text x={W - padL} y={y(v) - 5} textAnchor="end" fontSize={11} fill="var(--ink-3)" className="num">{fmtUSD(v)}</text>
           </g>
         ))}
-        {xlabels.map((lab, i) => (
-          <text key={i} x={padL + (i / (xlabels.length - 1)) * (W - padL * 2)} y={H - 8} textAnchor={i === 0 ? "start" : i === xlabels.length - 1 ? "end" : "middle"} fontSize={11} fill="var(--ink-3)">{lab}</text>
+        {tickIdx.map((idx, i) => (
+          <text key={i} x={x(idx)} y={H - 8} textAnchor={i === 0 ? "start" : i === tickCount - 1 ? "end" : "middle"} fontSize={11} fill="var(--ink-3)">{i === tickCount - 1 ? "Now" : fmtTick(dates[idx])}</text>
         ))}
         <path d={area} fill="url(#bigfill)" />
         <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
@@ -130,6 +138,12 @@ const dLabel: React.CSSProperties = { fontSize: 11.5, color: "var(--ink-2)", fon
 
 function TxDrawer({ tx, onClose, onSaved }: { tx: LedgerTx | "new"; onClose: () => void; onSaved: () => void }) {
   const e = tx === "new" ? null : tx;
+  const [type, setType] = useState<string>(e?.type ?? "buy");
+  const [qty, setQty] = useState<string>(e?.qty != null ? String(e.qty) : "");
+  const [price, setPrice] = useState<string>(e?.price != null ? String(e.price) : "");
+  const [amount, setAmount] = useState<string>(e?.amount != null ? String(e.amount) : "");
+  const perUnit = type === "buy" || type === "sell";
+  const computedAmount = perUnit ? (parseFloat(qty) || 0) * (parseFloat(price) || 0) : parseFloat(amount) || 0;
   const F = ({ label, children }: { label: string; children: React.ReactNode }) => (<label style={{ display: "block" }}><span style={dLabel}>{label}</span>{children}</label>);
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 80 }}>
@@ -141,20 +155,27 @@ function TxDrawer({ tx, onClose, onSaved }: { tx: LedgerTx | "new"; onClose: () 
         </div>
         <form action={async (fd) => { if (e) await updateTransaction(fd); else await addTransaction(fd); onClose(); onSaved(); }} style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 13 }}>
           {e && <input type="hidden" name="id" value={e.id} />}
+          <input type="hidden" name="amount" value={computedAmount || ""} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <F label="Date"><input name="tx_date" type="date" defaultValue={e?.tx_date ?? new Date().toISOString().slice(0, 10)} style={dInput} /></F>
-            <F label="Type"><select name="type" defaultValue={e?.type ?? "buy"} style={{ ...dInput, cursor: "pointer" }}>{TX_TYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}</select></F>
+            <F label="Type"><select name="type" value={type} onChange={(ev) => setType(ev.target.value)} style={{ ...dInput, cursor: "pointer" }}>{TX_TYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}</select></F>
           </div>
           <F label="Name"><input name="name" defaultValue={e?.name ?? ""} placeholder="Bitcoin / HYSA · Marcus" style={dInput} /></F>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <F label="Asset class"><select name="cls" defaultValue={e?.cls ?? "crypto"} style={{ ...dInput, cursor: "pointer" }}>{CLS_LIST.map((c) => <option key={c} value={c}>{c}</option>)}</select></F>
             <F label="Ticker"><input name="ticker" defaultValue={e?.ticker ?? ""} placeholder="BTC" style={dInput} /></F>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <F label="Qty"><input name="qty" type="number" step="any" defaultValue={e?.qty ?? ""} style={dInput} /></F>
-            <F label="Price"><input name="price" type="number" step="any" defaultValue={e?.price ?? ""} style={dInput} /></F>
-            <F label="Amount"><input name="amount" type="number" step="any" defaultValue={e?.amount ?? ""} style={dInput} /></F>
-          </div>
+          {perUnit ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <F label="Quantity"><input name="qty" type="number" step="any" value={qty} onChange={(ev) => setQty(ev.target.value)} style={dInput} /></F>
+                <F label="Price / unit"><input name="price" type="number" step="any" value={price} onChange={(ev) => setPrice(ev.target.value)} style={dInput} /></F>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Total: <span className="num" style={{ fontWeight: 600, color: "var(--ink)" }}>{fmtUSD(computedAmount, { full: true })}</span> (qty × price)</div>
+            </>
+          ) : (
+            <F label="Amount (total $)"><input value={amount} onChange={(ev) => setAmount(ev.target.value)} type="number" step="any" style={dInput} /></F>
+          )}
           <F label="Account"><input name="account" defaultValue={e?.account ?? ""} style={dInput} /></F>
           <F label="Note"><input name="note" defaultValue={e?.note ?? ""} style={dInput} /></F>
           <button style={{ padding: 11, background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 9, fontSize: 13.5, fontWeight: 650, cursor: "pointer", fontFamily: "var(--font-sans)" }}>{e ? "Save changes" : "Add transaction"}</button>
@@ -175,39 +196,47 @@ export function HistoryView({ net, snapshots, transactions }: { net: number; sna
   const [drawer, setDrawer] = useState<LedgerTx | "new" | null>(null);
   const [range, setRange] = useState<Range>("1Y");
 
-  const RANGE_DAYS: Record<Range, number> = { "1D": 1, "1W": 7, "1M": 30, "1Y": 365, ALL: 3650 };
   const nowMs = Date.now();
-  const startMs = nowMs - RANGE_DAYS[range] * 864e5;
+  const sorted = snapshots; // {date,net}[] ascending (reconstruction or recorded)
+  const earliestMs = sorted.length ? parseLocal(sorted[0].date).getTime() : nowMs - 365 * DAYMS;
+  const startMs = range === "ALL" ? earliestMs : Math.max(earliestMs, nowMs - RANGE_DAYS[range] * DAYMS);
 
-  // Use real recorded snapshots when we have at least 2 in the window; else estimate.
-  const realWindow = snapshots.filter((s) => { const d = new Date(s.date).getTime(); return d >= startMs && d <= nowMs; });
-  const isReal = realWindow.length >= 2;
-  const points = isReal ? realWindow.map((s) => s.net) : netWorthSeries(net, range);
-  const dateMs = isReal ? realWindow.map((s) => new Date(s.date).getTime()) : null;
+  // real windowed series when we have data; else a dated synthetic estimate
+  const realWin = sorted.filter((s) => parseLocal(s.date).getTime() >= startMs - DAYMS);
+  const isReal = realWin.length >= 2;
+  let series: { date: string; net: number }[];
+  if (isReal) {
+    series = realWin;
+  } else {
+    const vals = netWorthSeries(net, range);
+    const synStart = range === "ALL" ? nowMs - 365 * DAYMS : nowMs - RANGE_DAYS[range] * DAYMS;
+    series = vals.map((v, i) => ({ date: isoLocal(synStart + (i / Math.max(1, vals.length - 1)) * (nowMs - synStart)), net: v }));
+  }
+  const points = series.map((s) => s.net);
+  const seriesDates = series.map((s) => s.date);
+  const seriesMs = seriesDates.map((d) => parseLocal(d).getTime());
   const idxForDate = (ts: number) => {
-    if (!dateMs) return 0;
     let bi = 0, bd = Infinity;
-    dateMs.forEach((d, i) => { const dd = Math.abs(d - ts); if (dd < bd) { bd = dd; bi = i; } });
+    seriesMs.forEach((d, i) => { const dd = Math.abs(d - ts); if (dd < bd) { bd = dd; bi = i; } });
     return bi;
   };
 
   const INFLOW = new Set(["sell", "deposit", "dividend", "loan_payment"]);
   const markers: TxMarker[] = transactions
-    .filter((t) => { const d = new Date(t.tx_date).getTime(); return d >= startMs && d <= nowMs; })
-    .map((t) => {
-      const ts = new Date(t.tx_date).getTime();
-      const tt = isReal ? idxForDate(ts) / Math.max(1, points.length - 1) : (ts - startMs) / (nowMs - startMs || 1);
-      return {
-        t: Math.min(1, Math.max(0, tt)),
-        type: (INFLOW.has(t.type) ? "in" : "out") as "in" | "out",
-        amt: txAmount(t),
-        label: `${t.type.replace("_", " ")} · ${t.name ?? t.ticker ?? ""}`.trim(),
-        date: t.tx_date,
-      };
-    });
+    .filter((t) => { const d = parseLocal(t.tx_date).getTime(); return d >= seriesMs[0] - DAYMS && d <= nowMs + DAYMS; })
+    .map((t) => ({
+      t: Math.min(1, Math.max(0, idxForDate(parseLocal(t.tx_date).getTime()) / Math.max(1, points.length - 1))),
+      type: (INFLOW.has(t.type) ? "in" : "out") as "in" | "out",
+      amt: txAmount(t),
+      label: `${t.type.replace("_", " ")} · ${t.name ?? t.ticker ?? ""}`.trim(),
+      date: t.tx_date,
+    }));
+
   const first = points[0], last = points[points.length - 1];
   const chg = last - first;
   const chgPct = first ? (chg / first) * 100 : 0;
+  const spanDays = (seriesMs[seriesMs.length - 1] - seriesMs[0]) / DAYMS;
+  const spanText = spanDays < 2 ? "today" : spanDays < 45 ? `${Math.round(spanDays)} days` : spanDays < 400 ? `${Math.round(spanDays / 30)} months` : `${(spanDays / 365).toFixed(1)} years`;
   const ranges: Range[] = ["1D", "1W", "1M", "1Y", "ALL"];
 
   return (
@@ -220,7 +249,7 @@ export function HistoryView({ net, snapshots, transactions }: { net: number; sna
             <span className="num" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 14.5, fontWeight: 600, color: chg >= 0 ? "var(--pos)" : "var(--neg)" }}>
               {chg >= 0 ? <ArrowUp size={14} /> : <ArrowDown size={14} />}{fmtUSD(Math.abs(chg), { full: true })} ({fmtPct(chgPct, true)})
             </span>
-            <span style={{ fontSize: 13, color: "var(--ink-3)" }}>over {RANGE_OVER[range]}</span>
+            <span style={{ fontSize: 13, color: "var(--ink-3)" }}>over {spanText}</span>
           </div>
         </div>
         <div style={{ display: "inline-flex", gap: 4, background: "var(--bg-sunk)", padding: 4, borderRadius: 9 }}>
@@ -231,10 +260,15 @@ export function HistoryView({ net, snapshots, transactions }: { net: number; sna
       </div>
 
       <div style={{ background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "28px 28px 18px" }}>
-        <BigChart points={points} markers={markers} color={chg >= 0 ? "var(--pos)" : "var(--neg)"} range={range} />
+        <BigChart points={points} markers={markers} color={chg >= 0 ? "var(--pos)" : "var(--neg)"} dates={seriesDates} />
         {!isReal && (
           <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--ink-3)" }}>
             Estimated trend, anchored to today&apos;s net worth — daily history is now recording and replaces this as it builds.
+          </div>
+        )}
+        {isReal && range === "ALL" && (
+          <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--ink-3)" }}>
+            History reconstructed from your holdings × prices; free price data goes back ~1 year, so it can&apos;t show earlier.
           </div>
         )}
       </div>

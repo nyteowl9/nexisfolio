@@ -95,11 +95,11 @@ export async function fetchPriceSeriesDated(
 ): Promise<DatedPrice[] | null> {
   if (cls === "crypto") {
     const id = providerId || (await resolveCoinId(ticker));
-    return id ? cryptoSeries(id, days) : null;
+    return id ? cryptoSeries(id, Math.min(days, 365)) : null; // CoinGecko free = 365d max
   }
   if (cls === "stocks" || cls === "metals") {
     const sym = yahooSymbol(cls, ticker) ?? ticker;
-    return yahooSeries(sym, "2y");
+    return yahooSeries(sym, "1y");
   }
   return null;
 }

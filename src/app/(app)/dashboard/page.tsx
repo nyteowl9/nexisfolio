@@ -5,6 +5,7 @@ import { seedSamplePortfolio } from "@/lib/db/seed";
 import { clearPortfolio } from "@/lib/db/positions";
 import { getPortfolio } from "@/lib/db/portfolio";
 import { recordSnapshot } from "@/lib/db/snapshots";
+import { refreshStalePrices } from "@/lib/db/refresh";
 import { reconstructNetWorth } from "@/lib/db/networth-history";
 import { totals } from "@/lib/engine";
 import { Overview } from "@/components/app/Overview";
@@ -18,6 +19,7 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  await refreshStalePrices();
   const positions = await getPortfolio(supabase);
   const hasData = positions.length > 0;
   if (hasData) await recordSnapshot(supabase, user.id, totals(positions));

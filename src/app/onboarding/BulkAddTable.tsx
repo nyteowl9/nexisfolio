@@ -1,0 +1,61 @@
+"use client";
+
+import { useState } from "react";
+import { addPositionsBulk, type BulkRow } from "@/lib/db/positions";
+import type { AssetClass } from "@/lib/engine";
+
+type Row = { cls: AssetClass; ticker: string; qty: string; cost: string; date: string };
+const blank = (): Row => ({ cls: "crypto", ticker: "", qty: "", cost: "", date: "" });
+
+const cell: React.CSSProperties = { width: "100%", padding: "8px 9px", border: "1px solid #D8DADD", borderRadius: 7, fontSize: 12.5, fontFamily: "inherit", background: "#FBFBFC", color: "#15171A", boxSizing: "border-box" };
+
+export function BulkAddTable() {
+  const [rows, setRows] = useState<Row[]>([blank(), blank(), blank()]);
+  const [pending, setPending] = useState(false);
+
+  const setRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const filled = rows.filter((r) => r.ticker.trim() && parseFloat(r.qty) > 0).length;
+
+  const submit = async () => {
+    const payload: BulkRow[] = rows
+      .filter((r) => r.ticker.trim() && parseFloat(r.qty) > 0)
+      .map((r) => ({ cls: r.cls, ticker: r.ticker.trim(), qty: parseFloat(r.qty), costPerUnit: r.cost ? parseFloat(r.cost) : undefined, acquiredDate: r.date || undefined }));
+    if (!payload.length) return;
+    setPending(true);
+    await addPositionsBulk(payload); // redirects on success
+  };
+
+  return (
+    <div>
+      <p style={{ fontSize: 12.5, color: "#8A9099", marginBottom: 12 }}>
+        Add several market holdings at once — live price fills in automatically. (Real estate, cash &
+        collectibles use the single form.)
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 0.9fr 1fr 1.1fr 28px", gap: 8, fontSize: 10.5, fontWeight: 600, color: "#8A9099", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>
+        <span>Class</span><span>Ticker</span><span>Qty</span><span>Cost/unit</span><span>Acquired</span><span />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {rows.map((r, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 0.9fr 1fr 1.1fr 28px", gap: 8, alignItems: "center" }}>
+            <select value={r.cls} onChange={(e) => setRow(i, { cls: e.target.value as AssetClass })} style={{ ...cell, cursor: "pointer" }}>
+              <option value="crypto">Crypto</option>
+              <option value="stocks">Stocks</option>
+              <option value="metals">Metals</option>
+            </select>
+            <input value={r.ticker} onChange={(e) => setRow(i, { ticker: e.target.value.toUpperCase() })} placeholder="BTC" style={cell} />
+            <input value={r.qty} onChange={(e) => setRow(i, { qty: e.target.value })} type="number" step="any" placeholder="0" style={cell} />
+            <input value={r.cost} onChange={(e) => setRow(i, { cost: e.target.value })} type="number" step="any" placeholder="opt." style={cell} />
+            <input value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} type="date" style={cell} />
+            <button onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((_, j) => j !== i) : rs))} title="Remove row" style={{ background: "transparent", border: "none", color: "#8A9099", cursor: "pointer", fontSize: 16 }}>×</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+        <button onClick={() => setRows((rs) => [...rs, blank()])} style={{ fontSize: 12.5, fontWeight: 600, color: "#5C6168", background: "#F2F3F4", border: "1px solid #E7E8EA", borderRadius: 7, padding: "7px 12px", cursor: "pointer", fontFamily: "inherit" }}>+ Add row</button>
+        <button onClick={submit} disabled={pending || filled === 0} style={{ marginLeft: "auto", padding: "9px 18px", background: filled ? "#15171A" : "#F2F3F4", color: filled ? "#fff" : "#8A9099", border: "none", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: filled && !pending ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+          {pending ? "Adding…" : `Add ${filled || ""} asset${filled === 1 ? "" : "s"}`}
+        </button>
+      </div>
+    </div>
+  );
+}

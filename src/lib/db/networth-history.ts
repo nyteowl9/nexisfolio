@@ -35,11 +35,11 @@ export async function reconstructNetWorth(supabase: SupabaseClient, positions: P
 
   const todayMs = Date.now();
   let startMs = Math.min(...dates);
-  const cap = todayMs - 730 * DAY;
+  const cap = todayMs - 365 * DAY; // free price history is limited to ~1y
   if (startMs < cap) startMs = cap;
   startMs = new Date(iso(startMs)).getTime();
 
-  const nDays = Math.min(731, Math.max(2, Math.floor((todayMs - startMs) / DAY) + 1));
+  const nDays = Math.min(366, Math.max(2, Math.floor((todayMs - startMs) / DAY) + 1));
   const grid: number[] = [];
   for (let i = 0; i < nDays; i++) grid.push(startMs + i * DAY);
 

@@ -52,10 +52,11 @@ export async function insertPosition(
 ): Promise<string> {
   const unit = isUnitPriced(input.cls);
 
-  // Resolve a live price for unit-priced assets when one wasn't supplied.
+  // Always pull a live quote for unit-priced assets so we get a real price AND
+  // prior close (for an accurate 24h move). currentPrice is only a fallback.
   let price = input.currentPrice;
   let prev = input.currentPrice;
-  if (unit && input.ticker && price == null) {
+  if (unit && input.ticker) {
     const q = await fetchQuote(input.cls, input.ticker, input.providerId);
     if (q) {
       price = q.price;
@@ -174,6 +175,36 @@ export async function addPosition(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirect(`${redirectTo}?added=${encodeURIComponent(name!)}`);
+}
+
+export interface BulkRow {
+  cls: AssetClass;
+  ticker?: string;
+  name?: string;
+  qty?: number;
+  costPerUnit?: number;
+  acquiredDate?: string;
+}
+
+/** Server action: add several market positions at once (the bulk table). */
+export async function addPositionsBulk(rows: BulkRow[]) {
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  let added = 0;
+  for (const r of rows) {
+    if (!isUnitPriced(r.cls) || !r.ticker || !r.qty) continue;
+    await insertPosition(supabase, user.id, {
+      cls: r.cls,
+      name: r.name?.trim() || r.ticker.toUpperCase(),
+      ticker: r.ticker.toUpperCase(),
+      qty: r.qty,
+      costPerUnit: r.costPerUnit,
+      acquiredDate: r.acquiredDate,
+    });
+    added++;
+  }
+  revalidatePath("/dashboard");
+  redirect(added > 0 ? `/dashboard` : "/onboarding?error=Add+at+least+one+row");
 }
 
 const CHAINS: Record<string, { ticker: string; name: string }> = {
