@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { isUnitPriced, type AssetClass } from "@/lib/engine";
+import { syncPositionQty } from "@/lib/db/holdings-sync";
 
 const num = (v: FormDataEntryValue | null) => {
   const n = Number(v);
@@ -11,17 +10,9 @@ const num = (v: FormDataEntryValue | null) => {
 };
 const str = (v: FormDataEntryValue | null) => (typeof v === "string" ? v.trim() : "");
 
-/** For unit-priced positions, keep position.qty in sync with the sum of its lots. */
-async function syncQty(supabase: SupabaseClient, positionId: string, userId: string) {
-  const { data: pos } = await supabase.from("positions").select("cls").eq("id", positionId).eq("user_id", userId).single();
-  if (!pos || !isUnitPriced(pos.cls as AssetClass)) return;
-  const { data: lots } = await supabase.from("lots").select("qty").eq("position_id", positionId);
-  const total = (lots ?? []).reduce((s, l) => s + Number(l.qty), 0);
-  await supabase.from("positions").update({ qty: total }).eq("id", positionId).eq("user_id", userId);
-}
-
 function done(positionId: string) {
   revalidatePath("/dashboard");
+  revalidatePath("/history");
   revalidatePath(`/detail/${positionId}`);
 }
 
@@ -31,15 +22,27 @@ export async function addLot(formData: FormData) {
   if (!user) return;
   const positionId = str(formData.get("positionId"));
   if (!positionId) return;
-  await supabase.from("lots").insert({
-    user_id: user.id,
-    position_id: positionId,
-    qty: num(formData.get("qty")),
-    price: num(formData.get("price")),
-    acquired_date: str(formData.get("acquired_date")) || new Date().toISOString().slice(0, 10),
-    account: str(formData.get("account")) || null,
-  });
-  await syncQty(supabase, positionId, user.id);
+  const qty = num(formData.get("qty"));
+  const price = num(formData.get("price"));
+  const acquired_date = str(formData.get("acquired_date")) || new Date().toISOString().slice(0, 10);
+  const account = str(formData.get("account")) || null;
+
+  const { data: lot } = await supabase
+    .from("lots")
+    .insert({ user_id: user.id, position_id: positionId, qty, price, acquired_date, account })
+    .select("id")
+    .single();
+
+  // mirror as a linked buy in the ledger
+  const { data: pos } = await supabase.from("positions").select("cls,ticker,name").eq("id", positionId).single();
+  if (pos && lot) {
+    await supabase.from("transactions").insert({
+      user_id: user.id, position_id: positionId, lot_id: lot.id, tx_date: acquired_date,
+      type: "buy", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty, price, amount: qty * price,
+      account, source: "manual", note: "Added lot",
+    });
+  }
+  await syncPositionQty(supabase, positionId, user.id);
   done(positionId);
 }
 
@@ -50,13 +53,15 @@ export async function updateLot(formData: FormData) {
   const id = str(formData.get("id"));
   const positionId = str(formData.get("positionId"));
   if (!id) return;
-  await supabase.from("lots").update({
-    qty: num(formData.get("qty")),
-    price: num(formData.get("price")),
-    acquired_date: str(formData.get("acquired_date")) || new Date().toISOString().slice(0, 10),
-    account: str(formData.get("account")) || null,
-  }).eq("id", id).eq("user_id", user.id);
-  await syncQty(supabase, positionId, user.id);
+  const qty = num(formData.get("qty"));
+  const price = num(formData.get("price"));
+  const acquired_date = str(formData.get("acquired_date")) || new Date().toISOString().slice(0, 10);
+  const account = str(formData.get("account")) || null;
+
+  await supabase.from("lots").update({ qty, price, acquired_date, account }).eq("id", id).eq("user_id", user.id);
+  // keep the linked ledger transaction in sync
+  await supabase.from("transactions").update({ qty, price, amount: qty * price, tx_date: acquired_date }).eq("lot_id", id).eq("user_id", user.id);
+  await syncPositionQty(supabase, positionId, user.id);
   done(positionId);
 }
 
@@ -67,7 +72,9 @@ export async function deleteLot(formData: FormData) {
   const id = str(formData.get("id"));
   const positionId = str(formData.get("positionId"));
   if (!id) return;
+  // remove the linked ledger transaction first (FK would otherwise null it out)
+  await supabase.from("transactions").delete().eq("lot_id", id).eq("user_id", user.id);
   await supabase.from("lots").delete().eq("id", id).eq("user_id", user.id);
-  await syncQty(supabase, positionId, user.id);
+  await syncPositionQty(supabase, positionId, user.id);
   done(positionId);
 }

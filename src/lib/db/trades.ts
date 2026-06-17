@@ -40,8 +40,10 @@ export async function logTrade(formData: FormData) {
   const unit = isUnitPriced(cls);
   const account = str(formData.get("account")) || pos.account || null;
 
+  let lotId: string | null = null;
   if (side === "buy") {
-    await supabase.from("lots").insert({ user_id: user.id, position_id: positionId, qty, price, acquired_date: date, account });
+    const { data: lotData } = await supabase.from("lots").insert({ user_id: user.id, position_id: positionId, qty, price, acquired_date: date, account }).select("id").single();
+    lotId = lotData?.id ?? null;
     if (unit) await supabase.from("positions").update({ qty: (pos.qty ?? 0) + qty }).eq("id", positionId);
   } else {
     // consume lots FIFO
@@ -73,6 +75,7 @@ export async function logTrade(formData: FormData) {
   await supabase.from("transactions").insert({
     user_id: user.id,
     position_id: positionId,
+    lot_id: lotId,
     tx_date: date,
     type: side,
     cls,

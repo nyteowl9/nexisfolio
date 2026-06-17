@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { syncPositionQty } from "@/lib/db/holdings-sync";
 import type { AssetClass } from "@/lib/engine";
 
 const str = (v: FormDataEntryValue | null) => {
@@ -43,8 +44,18 @@ export async function updateTransaction(formData: FormData) {
   if (!user) return;
   const id = str(formData.get("id"));
   if (!id) return;
-  await supabase.from("transactions").update(fields(formData)).eq("id", id).eq("user_id", user.id);
+  const f = fields(formData);
+  await supabase.from("transactions").update(f).eq("id", id).eq("user_id", user.id);
+
+  // keep the linked tax lot in sync (buys)
+  const { data: tx } = await supabase.from("transactions").select("lot_id,position_id").eq("id", id).single();
+  if (tx?.lot_id) {
+    await supabase.from("lots").update({ qty: f.qty, price: f.price, acquired_date: f.tx_date }).eq("id", tx.lot_id).eq("user_id", user.id);
+    if (tx.position_id) await syncPositionQty(supabase, tx.position_id, user.id);
+  }
+  revalidatePath("/dashboard");
   revalidatePath("/history");
+  if (tx?.position_id) revalidatePath(`/detail/${tx.position_id}`);
 }
 
 export async function deleteTransaction(formData: FormData) {
@@ -53,6 +64,13 @@ export async function deleteTransaction(formData: FormData) {
   if (!user) return;
   const id = str(formData.get("id"));
   if (!id) return;
+  const { data: tx } = await supabase.from("transactions").select("lot_id,position_id").eq("id", id).single();
   await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
+  if (tx?.lot_id) {
+    await supabase.from("lots").delete().eq("id", tx.lot_id).eq("user_id", user.id);
+    if (tx.position_id) await syncPositionQty(supabase, tx.position_id, user.id);
+  }
+  revalidatePath("/dashboard");
   revalidatePath("/history");
+  if (tx?.position_id) revalidatePath(`/detail/${tx.position_id}`);
 }

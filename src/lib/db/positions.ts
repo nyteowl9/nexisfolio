@@ -92,16 +92,18 @@ export async function insertPosition(
   if (error) throw new Error(`add position: ${error.message}`);
   const posId = data.id as string;
 
+  let lotId: string | null = null;
   if (unit && input.qty) {
-    const { error: le } = await supabase.from("lots").insert({
+    const { data: lotData, error: le } = await supabase.from("lots").insert({
       user_id: userId,
       position_id: posId,
       qty: input.qty,
       price: input.costPerUnit ?? price ?? 0,
       acquired_date: input.acquiredDate ?? today(),
       account: input.account ?? null,
-    });
+    }).select("id").single();
     if (le) throw new Error(`add lot: ${le.message}`);
+    lotId = lotData.id as string;
 
     if (input.ticker && price != null) {
       const admin = createAdminClient();
@@ -122,6 +124,7 @@ export async function insertPosition(
   await supabase.from("transactions").insert({
     user_id: userId,
     position_id: posId,
+    lot_id: lotId,
     tx_date: input.acquiredDate ?? input.valuedDate ?? today(),
     type: txType,
     cls: input.cls,
