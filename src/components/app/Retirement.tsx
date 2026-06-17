@@ -247,7 +247,9 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
   const [annualSpend, setSpend] = useState(120000);
   const [monthly, setMonthly] = useState(8000);
   const [target, setTarget] = useState(3000000);
+  const [customGoal, setCustomGoal] = useState(false);
   const [withdrawalRate, setWR] = useState(4);
+  const [inflation, setInflation] = useState(3);
   const [coastAge, setCoastAge] = useState(55);
   const [includeHome, setIncludeHome] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, number>>({});
@@ -255,10 +257,10 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
 
   const applyMethod = (mth: "traditional" | "coast" | "fire") => { setMethod(mth); setRetireAge(mth === "fire" ? 50 : 65); };
 
-  const opts: RetirementOpts = { currentAge, retireAge: Math.max(retireAge, currentAge + 1), annualSpend, monthly, scenario, target, method, coastAge, withdrawalRate, includeHome, cagrOverride: overrides };
+  const opts: RetirementOpts = { currentAge, retireAge: Math.max(retireAge, currentAge + 1), annualSpend, monthly, scenario, target: customGoal ? target : null, method, coastAge, withdrawalRate, inflation, includeHome, cagrOverride: overrides };
   const ovKey = JSON.stringify(overrides);
-  const m = useMemo(() => retirement(positions, opts), [positions, currentAge, retireAge, annualSpend, monthly, scenario, target, method, coastAge, withdrawalRate, includeHome, ovKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const mc = useMemo(() => (showMC ? retirementMC(positions, { ...opts, sd: 0.13 }, 500) : null), [positions, showMC, currentAge, retireAge, annualSpend, monthly, scenario, target, method, coastAge, withdrawalRate, includeHome, ovKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = useMemo(() => retirement(positions, opts), [positions, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mc = useMemo(() => (showMC ? retirementMC(positions, { ...opts, sd: 0.13 }, 500) : null), [positions, showMC, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hitsGoal = m.fireAge != null;
   const already = hitsGoal && (m.fireAge as number) <= currentAge + 0.05;
@@ -347,7 +349,22 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
             <Slider label="Monthly contribution" value={monthly} min={0} max={40000} step={500} onChange={setMonthly} fmt={(v) => fmtUSD(v, { full: true })} />
             <Slider label="Annual spend in retirement" value={annualSpend} min={40000} max={400000} step={10000} onChange={setSpend} fmt={(v) => fmtUSD(v)} />
             <Slider label="Withdrawal rate" value={withdrawalRate} min={3} max={6} step={0.25} onChange={setWR} fmt={(v) => v + "%"} hint="4% is the classic safe rate. Lower = safer." />
-            <Slider label="Retirement goal" value={target} min={1000000} max={20000000} step={250000} onChange={setTarget} fmt={(v) => fmtUSD(v)} hint={`Your 4% FIRE number is ${fmtUSD(m.fireNumber)}.`} />
+            <Slider label="Inflation" value={inflation} min={0} max={6} step={0.5} onChange={setInflation} fmt={(v) => v + "%"} hint="Everything is shown in today's dollars (returns minus inflation)." />
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+                <input type="checkbox" checked={customGoal} onChange={(ev) => setCustomGoal(ev.target.checked)} style={{ accentColor: "var(--accent)", cursor: "pointer", width: 15, height: 15 }} />
+                <span style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 500 }}>Set a custom goal</span>
+              </label>
+              {customGoal ? (
+                <div style={{ marginTop: 10 }}>
+                  <Slider label="Retirement goal" value={target} min={1000000} max={20000000} step={250000} onChange={setTarget} fmt={(v) => fmtUSD(v)} hint="Overrides the spend ÷ rate target." />
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.45 }}>
+                  Goal auto-set to your FIRE number: <span className="num" style={{ color: "var(--ink-2)", fontWeight: 600 }}>{fmtUSD(m.fireNumber)}</span> = {fmtUSD(annualSpend)} ÷ {withdrawalRate}%.
+                </div>
+              )}
+            </div>
             <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", paddingTop: 2 }}>
               <input type="checkbox" checked={includeHome} onChange={(e) => setIncludeHome(e.target.checked)} style={{ marginTop: 2, accentColor: "var(--accent)", cursor: "pointer", width: 15, height: 15 }} />
               <span>
@@ -449,7 +466,7 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
       </div>
 
       <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.6, marginTop: 14 }}>
-        All figures are in today’s dollars; returns are real (after inflation). The uncertainty band runs {mc ? mc.runs : 500} simulations with random yearly returns around your blended assumption — exposing sequence-of-returns risk a single smooth line hides. Illustrative model, not financial advice.
+        All figures are in today’s dollars: your {(m.blended * 100).toFixed(1)}% blended return is adjusted to {(m.realBlended * 100).toFixed(1)}% real after {inflation}% inflation. The uncertainty band runs {mc ? mc.runs : 500} simulations with random yearly returns around that assumption — exposing sequence-of-returns risk a single smooth line hides. Illustrative model, not financial advice.
       </div>
     </div>
   );

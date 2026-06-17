@@ -76,6 +76,8 @@ export interface RetirementOpts {
   otherIncome?: number;
   otherIncomeAge?: number;
   includeHome?: boolean;
+  /** annual inflation % — returns are converted to real (today's-dollar) terms */
+  inflation?: number;
 }
 
 export interface RetirementYear {
@@ -112,6 +114,7 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
     otherIncome: 0,
     otherIncomeAge: 67,
     includeHome: false,
+    inflation: 3,
     ...opts,
   };
 
@@ -120,16 +123,20 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
   const baseCagr = SCENARIOS[o.scenario] || SCENARIOS.Base;
   const cagr: ClassMap = { ...baseCagr, ...(o.cagrOverride || {}) };
   const blended = blendedCAGR(cagr, invest);
+  // convert nominal assumptions to real (today's-dollar) terms
+  const infl = (o.inflation ?? 3) / 100;
+  const real = (n: number) => (1 + n) / (1 + infl) - 1;
+  const realBlended = real(blended);
   const fireNumber = o.annualSpend * (100 / o.withdrawalRate);
   const target = o.target != null ? o.target : fireNumber;
   const yrsToRetire = Math.max(0, o.retireAge - o.currentAge);
   const coastStop = o.method === "coast" && o.coastAge != null ? o.coastAge : o.retireAge;
 
-  const coastNumber = target / Math.pow(1 + blended, yrsToRetire);
+  const coastNumber = target / Math.pow(1 + realBlended, yrsToRetire);
   const coastAchieved = investable >= coastNumber;
 
-  const rmAcc = Math.pow(1 + blended, 1 / 12) - 1;
-  const drawRate = blended * 0.7; // de-risk in retirement
+  const rmAcc = Math.pow(1 + realBlended, 1 / 12) - 1;
+  const drawRate = realBlended * 0.7; // de-risk in retirement
   const rmDraw = Math.pow(1 + drawRate, 1 / 12) - 1;
 
   function walk(startBal: number, monthlyContrib: number) {
@@ -186,8 +193,9 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
   const fireAgeUp = ageHitting(investable * 1.1, o.monthly);
 
   const consBlended = blendedCAGR(SCENARIOS.Conservative, invest);
-  const rmC = Math.pow(1 + consBlended, 1 / 12) - 1;
-  const rmCdraw = Math.pow(1 + consBlended * 0.7, 1 / 12) - 1;
+  const realCons = real(consBlended);
+  const rmC = Math.pow(1 + realCons, 1 / 12) - 1;
+  const rmCdraw = Math.pow(1 + realCons * 0.7, 1 / 12) - 1;
   const safeWR = Math.min(o.withdrawalRate, 3.5);
   function survivesRetiringAt(R: number): boolean {
     let bal = investable;
@@ -222,8 +230,8 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
       color: CLASSES[k].color,
       value: invest[k] ?? 0,
       cagr: cagr[k] ?? 0,
-      y10: (invest[k] ?? 0) * Math.pow(1 + (cagr[k] ?? 0), 10),
-      y20: (invest[k] ?? 0) * Math.pow(1 + (cagr[k] ?? 0), 20),
+      y10: (invest[k] ?? 0) * Math.pow(1 + real(cagr[k] ?? 0), 10),
+      y20: (invest[k] ?? 0) * Math.pow(1 + real(cagr[k] ?? 0), 20),
     }))
     .filter((s) => s.value > 0)
     .sort((a, b) => b.value - a.value);
@@ -248,13 +256,14 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
     safeAge,
     safeNumber,
     consBlended,
+    realBlended,
     sustainableSpend,
     depletionAge,
     neverDepletes,
     series,
     sectors,
-    y10: fv(investable, o.monthly, 10, blended),
-    y20: fv(investable, o.monthly, 20, blended),
+    y10: fv(investable, o.monthly, 10, realBlended),
+    y20: fv(investable, o.monthly, 20, realBlended),
   };
 }
 
@@ -285,12 +294,14 @@ export function retirementMC(
     otherIncome: 0,
     otherIncomeAge: 67,
     includeHome: false,
+    inflation: 3,
     ...opts,
   };
   const invest = investableByClass(positions, o.includeHome);
   const investable = Object.values(invest).reduce((s, v) => s + (v ?? 0), 0);
   const cagr: ClassMap = { ...(SCENARIOS[o.scenario] || SCENARIOS.Base), ...(o.cagrOverride || {}) };
-  const mean = blendedCAGR(cagr, invest);
+  const nominalMean = blendedCAGR(cagr, invest);
+  const mean = (1 + nominalMean) / (1 + (o.inflation ?? 3) / 100) - 1; // real return
   const coastStop = o.method === "coast" && o.coastAge != null ? o.coastAge : o.retireAge;
   const years = o.endAge - o.currentAge + 1;
   const cols: number[][] = Array.from({ length: years }, () => []);
