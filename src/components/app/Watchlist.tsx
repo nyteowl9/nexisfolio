@@ -47,7 +47,7 @@ export function WatchlistView() {
       </div>
 
       <div style={{ background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 14, padding: "11px 24px", borderBottom: "var(--hair) solid var(--border)" }}>
+        <div className="nw-watch" style={{ display: "grid", gridTemplateColumns: GRID, gap: 14, padding: "11px 24px", borderBottom: "var(--hair) solid var(--border)" }}>
           {["Asset", "7-day", "Price", "24h", ""].map((h, i) => (
             <span key={i} style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textAlign: i > 0 && i < 4 ? "right" : i === 1 ? "center" : "left" }}>{h}</span>
           ))}
@@ -56,7 +56,7 @@ export function WatchlistView() {
           list.map((w) => {
             const up = w.chg >= 0;
             return (
-              <div key={w.sym} style={{ display: "grid", gridTemplateColumns: GRID, alignItems: "center", gap: 14, padding: "13px 24px", borderTop: "var(--hair) solid var(--border)" }}>
+              <div key={w.sym} className="nw-watch" style={{ display: "grid", gridTemplateColumns: GRID, alignItems: "center", gap: 14, padding: "13px 24px", borderTop: "var(--hair) solid var(--border)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
                   <AssetIcon cls={w.cls as AssetClass} ticker={w.sym} name={w.sym} size={34} radius={8} />
                   <div>

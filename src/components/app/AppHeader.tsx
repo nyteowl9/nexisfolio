@@ -31,7 +31,7 @@ export function AppHeader({ email }: { email?: string }) {
 
   return (
     <>
-      <header style={{ position: "sticky", top: 0, zIndex: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "0 28px", height: 56, borderBottom: "var(--hair) solid var(--border)", background: "var(--surface)" }}>
+      <header className="nw-hdr" style={{ position: "sticky", top: 0, zIndex: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "0 28px", height: 56, borderBottom: "var(--hair) solid var(--border)", background: "var(--surface)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24, minWidth: 0, flex: 1 }}>
           <Link href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
             <Image src="/demo/landing-assets/nexis-mark.png" alt="Nexis Folio" width={24} height={24} style={{ height: 24, width: "auto" }} />
@@ -48,11 +48,11 @@ export function AppHeader({ email }: { email?: string }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--pos)", fontWeight: 500 }}><Bolt size={12} /> live</span>
-          <button aria-label="Search" style={iconBtn}><Search size={15} /></button>
+          <span className="nw-hide-mobile" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--pos)", fontWeight: 500 }}><Bolt size={12} /> live</span>
+          <button className="nw-hide-mobile" aria-label="Search" style={iconBtn}><Search size={15} /></button>
           <button aria-label="Settings" onClick={openSettings} style={iconBtn}><Sliders size={15} /></button>
           <button aria-label="Toggle theme" onClick={toggleTheme} style={iconBtn}>{prefs.theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
-          <button onClick={() => setAddOpen(true)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer", fontFamily: "var(--font-sans)" }}><Plus size={15} /> Add position</button>
+          <button onClick={() => setAddOpen(true)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer", fontFamily: "var(--font-sans)" }}><Plus size={15} /><span className="nw-hide-mobile">Add position</span></button>
           <form action={signOut} title="Sign out">
             <button style={{ width: 30, height: 30, borderRadius: 99, background: "var(--bg-sunk)", border: "var(--hair) solid var(--border)", color: "var(--ink-2)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{(email?.[0] ?? "?").toUpperCase()}</button>
           </form>

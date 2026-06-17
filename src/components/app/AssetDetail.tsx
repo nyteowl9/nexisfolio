@@ -96,7 +96,7 @@ function MarketDetail({ p, realized, priceHistory }: { p: Position; realized: nu
         <div style={{ padding: "8px 12px 14px" }}><Area points={hist} width={1080} height={150} color={unreal >= 0 ? "var(--pos)" : "var(--neg)"} strokeWidth={2} /></div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", ...card, marginTop: 16 }}>
+      <div className="nw-grid4" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", ...card, marginTop: 16 }}>
         <Stat label="Market value" value={fmtUSD(value)} sub={p.qty ? `${fmtQty(p.qty)} units` : null} />
         <div style={{ borderLeft: "var(--hair) solid var(--border)" }}><Stat label="Cost basis" value={fmtUSD(basis)} sub={lots.length ? `${lots.length} lot${lots.length > 1 ? "s" : ""}` : null} /></div>
         <div style={{ borderLeft: "var(--hair) solid var(--border)" }}><Stat label="Unrealized P/L" value={(unreal >= 0 ? "+" : "−") + fmtUSD(Math.abs(unreal))} sub={fmtPct(unrealPct, true)} color={unreal >= 0 ? "var(--pos)" : "var(--neg)"} /></div>

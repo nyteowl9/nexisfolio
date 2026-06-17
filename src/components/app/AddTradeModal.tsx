@@ -35,7 +35,7 @@ function LogTradeForm() {
   }
 
   return (
-    <form action={logTrade} style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 20, alignItems: "start" }}>
+    <form action={logTrade} className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 20, alignItems: "start" }}>
       <input type="hidden" name="from" value="/dashboard" />
       <input type="hidden" name="side" value={side} />
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

@@ -98,7 +98,7 @@ export function LiabilitiesCard({ liabilities, positions }: { liabilities: Liabi
           liabilities.map((l, i) => {
             const info = ltvInfo(l, positions);
             return (
-              <div key={l.id} onClick={() => setDrawer(l)} style={{ display: "grid", gridTemplateColumns: "1fr 200px 130px", alignItems: "center", gap: 16, padding: "14px 24px", borderTop: i ? "var(--hair) solid var(--border)" : "none", cursor: "pointer" }}>
+              <div key={l.id} onClick={() => setDrawer(l)} className="nw-liab" style={{ display: "grid", gridTemplateColumns: "1fr 200px 130px", alignItems: "center", gap: 16, padding: "14px 24px", borderTop: i ? "var(--hair) solid var(--border)" : "none", cursor: "pointer" }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{l.name}</div>
                   <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{kindLabel(l.kind)}{l.rate != null ? ` · ${l.rate}% APR` : ""}{info ? ` · secured by ${info.pos.ticker && info.pos.ticker !== "—" ? info.pos.ticker : info.pos.name}` : ""}</div>
