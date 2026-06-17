@@ -24,6 +24,7 @@ import { Donut, Area } from "@/components/ui/charts";
 import { AssetIcon } from "@/components/ui/AssetIcon";
 import { Bolt, ArrowUp, ArrowDown, Chevron, Refresh } from "@/components/ui/icons";
 import { refreshPrices } from "@/lib/db/refresh";
+import { usePrefs } from "@/components/app/prefs-context";
 
 const COLS = "1fr 64px 64px 116px 118px 132px 16px";
 const card: React.CSSProperties = {
@@ -128,6 +129,8 @@ function UpdatePricesBtn() {
 }
 
 export function Overview({ positions }: { positions: Position[] }) {
+  const { prefs } = usePrefs();
+  const useBars = prefs.allocChart === "bars";
   const [active, setActive] = useState<AssetClass | null>(null);
   const [range, setRange] = useState<Range>("1W");
   const t = totals(positions);
@@ -186,19 +189,21 @@ export function Overview({ positions }: { positions: Position[] }) {
       </div>
 
       {/* allocation */}
-      <div className="nw-stack-2" style={{ ...card, padding: "24px 28px", marginBottom: 18, display: "grid", gridTemplateColumns: "220px 1fr", gap: 40, alignItems: "center" }}>
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <Donut
-            data={donutData}
-            size={200}
-            thickness={30}
-            activeKey={active}
-            onSlice={(k) => setActive(k as AssetClass)}
-            centerTop="Allocation"
-            centerMain={active ? `${((cls[active].value / t.net) * 100).toFixed(0)}%` : `${donutData.length}`}
-            centerSub={active ? CLASSES[active].label : "classes"}
-          />
-        </div>
+      <div className="nw-stack-2" style={{ ...card, padding: "24px 28px", marginBottom: 18, display: "grid", gridTemplateColumns: useBars ? "1fr" : "220px 1fr", gap: 40, alignItems: "center" }}>
+        {!useBars && (
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <Donut
+              data={donutData}
+              size={200}
+              thickness={30}
+              activeKey={active}
+              onSlice={(k) => setActive(k as AssetClass)}
+              centerTop="Allocation"
+              centerMain={active ? `${((cls[active].value / t.net) * 100).toFixed(0)}%` : `${donutData.length}`}
+              centerSub={active ? CLASSES[active].label : "classes"}
+            />
+          </div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%" }}>
           {donutData.map((d) => {
             const pct = (d.value / t.net) * 100;

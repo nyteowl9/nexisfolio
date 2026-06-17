@@ -53,3 +53,4 @@ export const Wallet = stroke(["M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2", "M3 7v10a
 export const Building = stroke(["M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16", "M15 9h4a1 1 0 0 1 1 1v11", "M4 21h17", "M8 8h0M8 12h0M8 16h0M11 8h0M11 12h0M11 16h0"]);
 export const LinkIcon = stroke(["M9 15l6-6", "M10.5 6.5l1-1a4 4 0 0 1 6 6l-1 1", "M13.5 17.5l-1 1a4 4 0 0 1-6-6l1-1"]);
 export const Coins = stroke(["M9 14a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z", "M16 9.5a6 6 0 1 1-7 9.9"]);
+export const Sliders = stroke(["M4 21v-7", "M4 10V3", "M12 21v-9", "M12 8V3", "M20 21v-5", "M20 12V3", "M1 14h6", "M9 8h6", "M17 16h6"]);

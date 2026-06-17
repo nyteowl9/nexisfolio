@@ -1,7 +1,8 @@
 import "@/styles/tokens.css";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { AppHeader } from "@/components/app/AppHeader";
+import { getPrefs } from "@/lib/db/prefs";
+import { PrefsProvider } from "@/components/app/PrefsProvider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -10,10 +11,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const prefs = await getPrefs(supabase);
+
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-sans)" }}>
-      <AppHeader email={user.email} />
+    <PrefsProvider initial={prefs} email={user.email}>
       {children}
-    </div>
+    </PrefsProvider>
   );
 }

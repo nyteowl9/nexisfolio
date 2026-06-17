@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPortfolio } from "@/lib/db/portfolio";
 import { getCatalogFor } from "@/lib/db/catalog";
+import { getPrefs } from "@/lib/db/prefs";
 import { fetchPriceHistory } from "@/lib/market/history";
 import { isUnitPriced, taxSummary, type AssetClass, type Catalog, type Disposal } from "@/lib/engine";
 import { AssetDetail } from "@/components/app/AssetDetail";
@@ -51,7 +52,8 @@ export default async function DetailPage({ params, searchParams }: { params: Pro
       const m = snap as { lots?: Disposal["lots"]; acq?: Disposal["acq"] } | null;
       return { ...base, lots: m?.lots, acq: m?.acq };
     });
-    realized = taxSummary(disposals, { method: "FIFO" }).rows
+    const { costBasis: method } = await getPrefs(supabase);
+    realized = taxSummary(disposals, { method }).rows
       .filter((r) => r.asset === position.ticker)
       .reduce((s, r) => s + r.gain, 0);
   }
