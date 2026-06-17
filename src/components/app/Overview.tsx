@@ -26,7 +26,7 @@ import { Bolt, ArrowUp, ArrowDown, Chevron, Refresh } from "@/components/ui/icon
 import { refreshPrices } from "@/lib/db/refresh";
 import { usePrefs } from "@/components/app/prefs-context";
 
-const COLS = "1fr 64px 64px 116px 118px 132px 16px";
+const COLS = "1fr 104px 64px 64px 112px 116px 128px 16px";
 const card: React.CSSProperties = {
   background: "var(--surface)",
   border: "var(--hair) solid var(--border)",
@@ -83,6 +83,9 @@ function HoldingRow({ p }: { p: Position }) {
           <div style={{ fontSize: 14, fontWeight: 550, color: "var(--ink)" }}>{p.name}</div>
           <div className={isUnitPriced(p.cls) ? "num" : ""} style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{sub}</div>
         </div>
+      </div>
+      <div className="num" style={{ textAlign: "right", fontSize: 13, color: "var(--ink)" }}>
+        {isUnitPriced(p.cls) ? fmtUSD(p.price ?? 0, { full: true, cents: (p.price ?? 0) < 1000 }) : "—"}
       </div>
       {pctCell(change24(p))}
       {pctCell(change7d(p))}
@@ -262,7 +265,7 @@ export function Overview({ positions, history }: { positions: Position[]; histor
 
         {/* column headers */}
         <div className="nw-holding" style={{ display: "grid", gridTemplateColumns: COLS, gap: 12, padding: "9px 22px 9px 24px", borderBottom: "var(--hair) solid var(--border)", background: "var(--surface-2)" }}>
-          {["Asset", "24h", "7d", "Cost basis", "Value", "Total return", ""].map((h, i) => (
+          {["Asset", "Price", "24h", "7d", "Cost basis", "Value", "Total return", ""].map((h, i) => (
             <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink-3)", letterSpacing: ".04em", textTransform: "uppercase", textAlign: i === 0 ? "left" : "right" }}>{h}</span>
           ))}
         </div>
