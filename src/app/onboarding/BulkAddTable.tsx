@@ -7,7 +7,9 @@ import type { AssetClass } from "@/lib/engine";
 type Row = { cls: AssetClass; ticker: string; qty: string; cost: string; date: string };
 const blank = (): Row => ({ cls: "crypto", ticker: "", qty: "", cost: "", date: "" });
 
-const cell: React.CSSProperties = { width: "100%", padding: "8px 9px", border: "1px solid #D8DADD", borderRadius: 7, fontSize: 12.5, fontFamily: "inherit", background: "#FBFBFC", color: "#15171A", boxSizing: "border-box" };
+// CSS-var colors with light fallbacks → works in the themed app (incl. dark) AND on onboarding.
+const cell: React.CSSProperties = { width: "100%", padding: "8px 9px", border: "1px solid var(--border-strong, #D8DADD)", borderRadius: 7, fontSize: 12.5, fontFamily: "inherit", background: "var(--surface-2, #FBFBFC)", color: "var(--ink, #15171A)", boxSizing: "border-box" };
+const muted = "var(--ink-3, #8A9099)";
 
 export function BulkAddTable() {
   const [rows, setRows] = useState<Row[]>([blank(), blank(), blank()]);
@@ -27,11 +29,11 @@ export function BulkAddTable() {
 
   return (
     <div>
-      <p style={{ fontSize: 12.5, color: "#8A9099", marginBottom: 12 }}>
+      <p style={{ fontSize: 12.5, color: muted, marginBottom: 12 }}>
         Add several market holdings at once — live price fills in automatically. (Real estate, cash &
         collectibles use the single form.)
       </p>
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 0.9fr 1fr 1.1fr 28px", gap: 8, fontSize: 10.5, fontWeight: 600, color: "#8A9099", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 0.9fr 1fr 1.1fr 28px", gap: 8, fontSize: 10.5, fontWeight: 600, color: muted, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>
         <span>Class</span><span>Ticker</span><span>Qty</span><span>Cost/unit</span><span>Acquired</span><span />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -46,13 +48,13 @@ export function BulkAddTable() {
             <input value={r.qty} onChange={(e) => setRow(i, { qty: e.target.value })} type="number" step="any" placeholder="0" style={cell} />
             <input value={r.cost} onChange={(e) => setRow(i, { cost: e.target.value })} type="number" step="any" placeholder="opt." style={cell} />
             <input value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} type="date" style={cell} />
-            <button onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((_, j) => j !== i) : rs))} title="Remove row" style={{ background: "transparent", border: "none", color: "#8A9099", cursor: "pointer", fontSize: 16 }}>×</button>
+            <button onClick={() => setRows((rs) => (rs.length > 1 ? rs.filter((_, j) => j !== i) : rs))} title="Remove row" style={{ background: "transparent", border: "none", color: muted, cursor: "pointer", fontSize: 16 }}>×</button>
           </div>
         ))}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
-        <button onClick={() => setRows((rs) => [...rs, blank()])} style={{ fontSize: 12.5, fontWeight: 600, color: "#5C6168", background: "#F2F3F4", border: "1px solid #E7E8EA", borderRadius: 7, padding: "7px 12px", cursor: "pointer", fontFamily: "inherit" }}>+ Add row</button>
-        <button onClick={submit} disabled={pending || filled === 0} style={{ marginLeft: "auto", padding: "9px 18px", background: filled ? "#15171A" : "#F2F3F4", color: filled ? "#fff" : "#8A9099", border: "none", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: filled && !pending ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+        <button onClick={() => setRows((rs) => [...rs, blank()])} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-2, #5C6168)", background: "var(--bg-sunk, #F2F3F4)", border: "1px solid var(--border, #E7E8EA)", borderRadius: 7, padding: "7px 12px", cursor: "pointer", fontFamily: "inherit" }}>+ Add row</button>
+        <button onClick={submit} disabled={pending || filled === 0} style={{ marginLeft: "auto", padding: "9px 18px", background: filled ? "var(--accent, #15171A)" : "var(--bg-sunk, #F2F3F4)", color: filled ? "var(--accent-ink, #fff)" : muted, border: "none", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: filled && !pending ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
           {pending ? "Adding…" : `Add ${filled || ""} asset${filled === 1 ? "" : "s"}`}
         </button>
       </div>
