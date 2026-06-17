@@ -113,6 +113,27 @@ export async function insertPosition(
     }
   }
 
+  // Record the add in the transactions ledger so History reflects it.
+  const txType = unit ? "buy" : input.cls === "cash" ? "deposit" : "valuation";
+  const txAmount = unit
+    ? (input.qty ?? 0) * (input.costPerUnit ?? price ?? 0)
+    : input.value ?? 0;
+  await supabase.from("transactions").insert({
+    user_id: userId,
+    position_id: posId,
+    tx_date: input.acquiredDate ?? input.valuedDate ?? today(),
+    type: txType,
+    cls: input.cls,
+    ticker: input.ticker ?? null,
+    name: input.name,
+    qty: unit ? input.qty ?? null : null,
+    price: unit ? input.costPerUnit ?? price ?? null : null,
+    amount: txAmount,
+    account: input.account ?? null,
+    source: "manual",
+    note: "Added position",
+  });
+
   return posId;
 }
 

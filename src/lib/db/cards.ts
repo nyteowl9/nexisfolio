@@ -101,7 +101,26 @@ export async function addCardItem(positionId: string, item: NewCardItem) {
   if (error) throw new Error(`add card: ${error.message}`);
 
   await recomputePosition(supabase, positionId, user.id);
+
+  // Ledger entry for the card add.
+  await supabase.from("transactions").insert({
+    user_id: user.id,
+    position_id: positionId,
+    tx_date: item.acquired || new Date().toISOString().slice(0, 10),
+    type: "buy",
+    cls: "private",
+    ticker: null,
+    name: `${item.name ?? "Card"}${item.type === "graded" ? ` ${item.grader} ${item.grade}` : ""}`,
+    qty: item.qty,
+    price: item.basis,
+    amount: (item.basis || 0) * item.qty,
+    account: "Cards",
+    source: "manual",
+    note: "Added card",
+  });
+
   revalidatePath("/dashboard");
+  revalidatePath("/history");
   revalidatePath(`/detail/${positionId}`);
 }
 
