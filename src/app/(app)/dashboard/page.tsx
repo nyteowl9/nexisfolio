@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { seedSamplePortfolio } from "@/lib/db/seed";
 import { clearPortfolio } from "@/lib/db/positions";
 import { getPortfolio } from "@/lib/db/portfolio";
+import { recordSnapshot } from "@/lib/db/snapshots";
+import { totals } from "@/lib/engine";
 import { Overview } from "@/components/app/Overview";
 
 export const metadata = { title: "Dashboard — NEXIS FOLIO" };
@@ -17,6 +19,7 @@ export default async function DashboardPage() {
 
   const positions = await getPortfolio(supabase);
   const hasData = positions.length > 0;
+  if (hasData) await recordSnapshot(supabase, user.id, totals(positions));
 
   if (!hasData) {
     return (

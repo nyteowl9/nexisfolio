@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { netWorthSeries, fmtUSD, fmtPct, fmtDate, CLASSES, type Range, type AssetClass } from "@/lib/engine";
 import { ArrowUp, ArrowDown } from "@/components/ui/icons";
 import { addTransaction, updateTransaction, deleteTransaction } from "@/lib/db/transactions";
+import type { Snap } from "@/lib/db/snapshots";
 
 export interface LedgerTx {
   id: string;
@@ -169,25 +170,41 @@ function TxDrawer({ tx, onClose, onSaved }: { tx: LedgerTx | "new"; onClose: () 
   );
 }
 
-export function HistoryView({ net, transactions }: { net: number; transactions: LedgerTx[] }) {
+export function HistoryView({ net, snapshots, transactions }: { net: number; snapshots: Snap[]; transactions: LedgerTx[] }) {
   const router = useRouter();
   const [drawer, setDrawer] = useState<LedgerTx | "new" | null>(null);
   const [range, setRange] = useState<Range>("1Y");
-  const points = netWorthSeries(net, range);
-  // plot the user's real transactions as dots, positioned by date within the range
+
   const RANGE_DAYS: Record<Range, number> = { "1D": 1, "1W": 7, "1M": 30, "1Y": 365, ALL: 3650 };
   const nowMs = Date.now();
   const startMs = nowMs - RANGE_DAYS[range] * 864e5;
+
+  // Use real recorded snapshots when we have at least 2 in the window; else estimate.
+  const realWindow = snapshots.filter((s) => { const d = new Date(s.date).getTime(); return d >= startMs && d <= nowMs; });
+  const isReal = realWindow.length >= 2;
+  const points = isReal ? realWindow.map((s) => s.net) : netWorthSeries(net, range);
+  const dateMs = isReal ? realWindow.map((s) => new Date(s.date).getTime()) : null;
+  const idxForDate = (ts: number) => {
+    if (!dateMs) return 0;
+    let bi = 0, bd = Infinity;
+    dateMs.forEach((d, i) => { const dd = Math.abs(d - ts); if (dd < bd) { bd = dd; bi = i; } });
+    return bi;
+  };
+
   const INFLOW = new Set(["sell", "deposit", "dividend", "loan_payment"]);
   const markers: TxMarker[] = transactions
     .filter((t) => { const d = new Date(t.tx_date).getTime(); return d >= startMs && d <= nowMs; })
-    .map((t) => ({
-      t: Math.min(1, Math.max(0, (new Date(t.tx_date).getTime() - startMs) / (nowMs - startMs || 1))),
-      type: INFLOW.has(t.type) ? "in" : "out",
-      amt: txAmount(t),
-      label: `${t.type.replace("_", " ")} · ${t.name ?? t.ticker ?? ""}`.trim(),
-      date: t.tx_date,
-    }));
+    .map((t) => {
+      const ts = new Date(t.tx_date).getTime();
+      const tt = isReal ? idxForDate(ts) / Math.max(1, points.length - 1) : (ts - startMs) / (nowMs - startMs || 1);
+      return {
+        t: Math.min(1, Math.max(0, tt)),
+        type: (INFLOW.has(t.type) ? "in" : "out") as "in" | "out",
+        amt: txAmount(t),
+        label: `${t.type.replace("_", " ")} · ${t.name ?? t.ticker ?? ""}`.trim(),
+        date: t.tx_date,
+      };
+    });
   const first = points[0], last = points[points.length - 1];
   const chg = last - first;
   const chgPct = first ? (chg / first) * 100 : 0;
@@ -215,6 +232,11 @@ export function HistoryView({ net, transactions }: { net: number; transactions: 
 
       <div style={{ background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "28px 28px 18px" }}>
         <BigChart points={points} markers={markers} color={chg >= 0 ? "var(--pos)" : "var(--neg)"} range={range} />
+        {!isReal && (
+          <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--ink-3)" }}>
+            Estimated trend, anchored to today&apos;s net worth — daily history is now recording and replaces this as it builds.
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 14, marginTop: 18, flexWrap: "wrap" }}>
