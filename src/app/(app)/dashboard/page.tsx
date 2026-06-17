@@ -5,6 +5,7 @@ import { seedSamplePortfolio } from "@/lib/db/seed";
 import { clearPortfolio } from "@/lib/db/positions";
 import { getPortfolio } from "@/lib/db/portfolio";
 import { recordSnapshot } from "@/lib/db/snapshots";
+import { reconstructNetWorth } from "@/lib/db/networth-history";
 import { totals } from "@/lib/engine";
 import { Overview } from "@/components/app/Overview";
 
@@ -45,9 +46,11 @@ export default async function DashboardPage() {
     );
   }
 
+  const history = await reconstructNetWorth(supabase, positions);
+
   return (
     <>
-      <Overview positions={positions} />
+      <Overview positions={positions} history={history} />
       <div className="nw-page" style={{ maxWidth: 1240, margin: "0 auto", padding: "0 36px 56px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <Link href="/onboarding" style={{ background: "var(--surface)", color: "var(--ink)", border: "var(--hair) solid var(--border)", padding: "8px 16px", borderRadius: 999, fontSize: 13, fontWeight: 500 }}>
           Add or manage assets

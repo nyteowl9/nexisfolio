@@ -128,7 +128,9 @@ function UpdatePricesBtn() {
   );
 }
 
-export function Overview({ positions }: { positions: Position[] }) {
+const SPARK_DAYS: Record<Range, number> = { "1D": 1, "1W": 7, "1M": 30, "1Y": 365, ALL: 99999 };
+
+export function Overview({ positions, history }: { positions: Position[]; history?: { date: string; net: number }[] }) {
   const { prefs } = usePrefs();
   const useBars = prefs.allocChart === "bars";
   const [active, setActive] = useState<AssetClass | null>(null);
@@ -138,7 +140,15 @@ export function Overview({ positions }: { positions: Position[] }) {
   const donutData = (Object.values(cls) as (typeof cls)[AssetClass][])
     .filter((c) => c.value > 0)
     .map((c) => ({ key: c.key, label: c.label, color: c.color, value: c.value }));
-  const spark = netWorthSeries(t.net, range);
+  // real reconstructed net-worth curve when available; else a synthetic line
+  let spark: number[];
+  if (history && history.length >= 2) {
+    const startMs = Date.now() - SPARK_DAYS[range] * 864e5;
+    const win = history.filter((h) => new Date(h.date).getTime() >= startMs);
+    spark = (win.length >= 2 ? win : history).map((h) => h.net);
+  } else {
+    spark = netWorthSeries(t.net, range);
+  }
   const groups = donutData
     .map((d) => ({ ...d, positions: cls[d.key].positions.slice().sort((a, b) => mv(b) - mv(a)) }))
     .filter((g) => !active || g.key === active);
