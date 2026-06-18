@@ -7,10 +7,17 @@ import { convert } from "@/lib/db/trades";
 const inputStyle: React.CSSProperties = { width: "100%", padding: "9px 11px", border: "var(--hair) solid var(--border-strong)", borderRadius: 8, fontSize: 13, fontFamily: "var(--font-sans)", background: "var(--surface-2)", color: "var(--ink)", boxSizing: "border-box" };
 const flabel = "mb-1 block text-xs font-semibold";
 
-interface Pos { id: string; name: string; ticker: string | null; cls: AssetClass; qty: number | null }
+interface Pos { id: string; name: string; ticker: string | null; cls: AssetClass; qty: number | null; price: number | null; value: number }
 interface Pick { cls: string; ticker: string; name: string; providerId?: string }
 
 const NEW_CLASSES: Array<[AssetClass, string]> = [["crypto", "Crypto"], ["stocks", "Stocks"], ["metals", "Metals"]];
+
+/** Drop a redundant ticker (e.g. "BTC · BTC" → "BTC"). */
+function nameOf(p: { ticker: string | null; name: string }) {
+  const tk = p.ticker && p.ticker !== "—" ? p.ticker : "";
+  if (tk && tk.toLowerCase() !== p.name.toLowerCase()) return `${tk} · ${p.name}`;
+  return p.name || tk;
+}
 
 function NewAssetSearch({ cls, onPick }: { cls: AssetClass; onPick: (p: Pick | null) => void }) {
   const [q, setQ] = useState("");
@@ -46,11 +53,17 @@ function NewAssetSearch({ cls, onPick }: { cls: AssetClass; onPick: (p: Pick | n
 export function ConvertForm() {
   const [positions, setPositions] = useState<Pos[]>([]);
   const [fromId, setFromId] = useState("");
-  const [amount, setAmount] = useState("");
   const [toMode, setToMode] = useState<"existing" | "new">("existing");
   const [toId, setToId] = useState("");
   const [newCls, setNewCls] = useState<AssetClass>("crypto");
   const [picked, setPicked] = useState<Pick | null>(null);
+  const [entry, setEntry] = useState<"usd" | "qty">("usd");
+  const [amount, setAmount] = useState("");
+  const [qty, setQty] = useState("");
+  const [custom, setCustom] = useState(false);
+  const [buyPriceStr, setBuyPriceStr] = useState("");
+  const [sellPriceStr, setSellPriceStr] = useState("");
+  const [destPrice, setDestPrice] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/positions").then((r) => r.json()).then((j) => {
@@ -67,16 +80,48 @@ export function ConvertForm() {
   const toSel = toOptions.find((p) => p.id === toId);
   const fromUnit = !!from && isUnitPriced(from.cls);
   const toUnit = toMode === "new" ? true : !!toSel && isUnitPriced(toSel.cls);
-  const amt = parseFloat(amount) || 0;
-  const ready = !!fromId && amt > 0 && (toMode === "existing" ? !!toId && toId !== fromId : !!picked);
+
+  // keep the destination valid when the source changes
+  useEffect(() => {
+    if (toMode === "existing" && (!toId || toId === fromId || !toOptions.some((p) => p.id === toId))) {
+      setToId(toOptions[0]?.id ?? "");
+    }
+  }, [fromId, toMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // fetch the destination's live price (for the quantity ⇄ dollars preview)
+  useEffect(() => {
+    const cls = toMode === "new" ? picked?.cls : toSel?.cls;
+    const ticker = toMode === "new" ? picked?.ticker : toSel?.ticker;
+    if (!toUnit || !cls || !ticker) { setDestPrice(null); return; }
+    const id = toMode === "new" ? picked?.providerId ?? "" : "";
+    let live = true;
+    fetch(`/api/quote?cls=${cls}&ticker=${encodeURIComponent(ticker)}&id=${encodeURIComponent(id)}`)
+      .then((r) => r.json())
+      .then((j) => { if (live) setDestPrice(j.quote?.price ?? null); });
+    return () => { live = false; };
+  }, [toMode, toId, picked, toUnit]);
+
+  const effDestPrice = custom && parseFloat(buyPriceStr) > 0 ? parseFloat(buyPriceStr) : destPrice;
+  const usdAmount = entry === "qty" ? (effDestPrice ? (parseFloat(qty) || 0) * effDestPrice : 0) : parseFloat(amount) || 0;
+  const estQty = entry === "qty" ? parseFloat(qty) || 0 : effDestPrice ? usdAmount / effDestPrice : 0;
+  const destName = toMode === "new" ? picked?.ticker : toSel ? (toSel.ticker && toSel.ticker !== "—" ? toSel.ticker : toSel.name) : "";
+
+  const ready = !!fromId && usdAmount > 0 && (toMode === "existing" ? !!toId && toId !== fromId : !!picked) && (entry === "qty" ? !!effDestPrice : true);
+
+  // hidden values sent to the server
+  const sendAmount = usdAmount ? String(usdAmount) : "";
+  const sendToPrice = entry === "qty" ? (effDestPrice ? String(effDestPrice) : "") : custom && parseFloat(buyPriceStr) > 0 ? buyPriceStr : "";
+  const sendFromPrice = custom && fromUnit && parseFloat(sellPriceStr) > 0 ? sellPriceStr : "";
 
   const label = (t: string) => <span className={flabel} style={{ color: "var(--ink-2)" }}>{t}</span>;
-  const posLabel = (p: Pos) => `${p.ticker && p.ticker !== "—" ? p.ticker + " · " : ""}${p.name}${isUnitPriced(p.cls) && p.qty != null ? ` (${fmtQty(p.qty)})` : ""}`;
 
   return (
     <form action={convert}>
       <input type="hidden" name="from" value="/dashboard" />
       <input type="hidden" name="toMode" value={toMode} />
+      <input type="hidden" name="amount" value={sendAmount} />
+      <input type="hidden" name="toPrice" value={sendToPrice} />
+      <input type="hidden" name="fromPrice" value={sendFromPrice} />
       {toMode === "new" && picked && (
         <>
           <input type="hidden" name="toCls" value={picked.cls} />
@@ -92,13 +137,8 @@ export function ConvertForm() {
         <label style={{ display: "block" }}>
           {label("From")}
           <select name="fromId" value={fromId} onChange={(e) => setFromId(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
-            {positions.map((p) => <option key={p.id} value={p.id}>{posLabel(p)}</option>)}
+            {positions.map((p) => <option key={p.id} value={p.id}>{nameOf(p)} — {fmtUSD(p.value)} available</option>)}
           </select>
-        </label>
-
-        <label style={{ display: "block" }}>
-          {label("Amount (USD)")}
-          <input name="amount" type="number" step="any" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10000" style={inputStyle} />
         </label>
 
         <div>
@@ -106,14 +146,14 @@ export function ConvertForm() {
             {label("To")}
             <div style={{ display: "inline-flex", gap: 3, background: "var(--bg-sunk)", padding: 3, borderRadius: 8 }}>
               {(["existing", "new"] as const).map((m) => (
-                <button type="button" key={m} onClick={() => setToMode(m)} style={{ padding: "4px 12px", fontSize: 12, fontWeight: 600, borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", textTransform: "capitalize", color: toMode === m ? "var(--ink)" : "var(--ink-3)", background: toMode === m ? "var(--surface)" : "transparent", boxShadow: toMode === m ? "var(--shadow)" : "none" }}>{m === "existing" ? "A holding" : "New asset"}</button>
+                <button type="button" key={m} onClick={() => setToMode(m)} style={{ padding: "4px 12px", fontSize: 12, fontWeight: 600, borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", color: toMode === m ? "var(--ink)" : "var(--ink-3)", background: toMode === m ? "var(--surface)" : "transparent", boxShadow: toMode === m ? "var(--shadow)" : "none" }}>{m === "existing" ? "A holding" : "New asset"}</button>
               ))}
             </div>
           </div>
           {toMode === "existing" ? (
             <select name="toId" value={toId} onChange={(e) => setToId(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
               {toOptions.length === 0 && <option value="">No other holdings — use “New asset”</option>}
-              {toOptions.map((p) => <option key={p.id} value={p.id}>{posLabel(p)}</option>)}
+              {toOptions.map((p) => <option key={p.id} value={p.id}>{nameOf(p)}</option>)}
             </select>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -127,6 +167,25 @@ export function ConvertForm() {
           )}
         </div>
 
+        {/* amount: by dollars, or by quantity of the destination */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            {label(entry === "qty" ? `Quantity${destName ? ` of ${destName}` : ""}` : "Amount (USD)")}
+            {toUnit && (
+              <div style={{ display: "inline-flex", gap: 3, background: "var(--bg-sunk)", padding: 3, borderRadius: 8 }}>
+                {(["usd", "qty"] as const).map((m) => (
+                  <button type="button" key={m} onClick={() => setEntry(m)} style={{ padding: "4px 12px", fontSize: 12, fontWeight: 600, borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", color: entry === m ? "var(--ink)" : "var(--ink-3)", background: entry === m ? "var(--surface)" : "transparent", boxShadow: entry === m ? "var(--shadow)" : "none" }}>{m === "usd" ? "$ amount" : "Units"}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          {entry === "qty" ? (
+            <input type="number" step="any" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="1" style={inputStyle} />
+          ) : (
+            <input type="number" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10000" style={inputStyle} />
+          )}
+        </div>
+
         <label style={{ display: "block" }}>
           {label("Date")}
           <input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} style={inputStyle} />
@@ -134,17 +193,27 @@ export function ConvertForm() {
 
         {(fromUnit || toUnit) && (
           <div>
-            <div style={{ display: "grid", gridTemplateColumns: fromUnit && toUnit ? "1fr 1fr" : "1fr", gap: 12 }}>
-              {fromUnit && <label>{label("Sell price (optional)")}<input name="fromPrice" type="number" step="any" placeholder="live" style={inputStyle} /></label>}
-              {toUnit && <label>{label("Buy price (optional)")}<input name="toPrice" type="number" step="any" placeholder="live" style={inputStyle} /></label>}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.4 }}>Leave blank to use today&rsquo;s live price. For a past-dated conversion, enter the price you actually got and set the date above.</div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={custom} onChange={(e) => setCustom(e.target.checked)} style={{ accentColor: "var(--accent)", cursor: "pointer", width: 15, height: 15 }} />
+              <span style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 500 }}>Use a custom price (past-dated conversion)</span>
+            </label>
+            {custom && (
+              <div style={{ display: "grid", gridTemplateColumns: fromUnit && toUnit ? "1fr 1fr" : "1fr", gap: 12, marginTop: 10 }}>
+                {fromUnit && <label>{label("Sell price")}<input value={sellPriceStr} onChange={(e) => setSellPriceStr(e.target.value)} type="number" step="any" placeholder="live" style={inputStyle} /></label>}
+                {toUnit && <label>{label("Buy price")}<input value={buyPriceStr} onChange={(e) => setBuyPriceStr(e.target.value)} type="number" step="any" placeholder="live" style={inputStyle} /></label>}
+              </div>
+            )}
           </div>
         )}
 
-        {from && amt > 0 && (
-          <div style={{ fontSize: 12.5, color: "var(--ink-3)", background: "var(--surface-2)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>
-            Converting <b style={{ color: "var(--ink)" }}>{fmtUSD(amt)}</b> from {from.ticker && from.ticker !== "—" ? from.ticker : from.name} into {toMode === "new" ? (picked ? picked.ticker : "your chosen asset") : posLabel(toOptions.find((p) => p.id === toId) ?? ({} as Pos)) || "a holding"}{isUnitPriced(from.cls) ? " · taxable disposal" : ""}.
+        {from && usdAmount > 0 && (
+          <div style={{ fontSize: 12.5, color: "var(--ink-3)", background: "var(--surface-2)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "10px 12px", lineHeight: 1.5 }}>
+            Converting <b style={{ color: "var(--ink)" }}>{fmtUSD(usdAmount)}</b> from {nameOf(from)}
+            {toUnit && estQty > 0 && destName && (
+              <> into <b style={{ color: "var(--ink)" }}>{fmtQty(estQty)} {destName}</b>{effDestPrice ? <> @ {fmtUSD(effDestPrice, { full: true, cents: effDestPrice < 1000 })}{!custom && entry !== "qty" ? " (live)" : ""}</> : null}</>
+            )}
+            {!toUnit && toSel && <> into {nameOf(toSel)}</>}
+            {fromUnit ? " · taxable disposal" : ""}.
           </div>
         )}
 
