@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { fmtUSD, fmtQty, isUnitPriced, type AssetClass } from "@/lib/engine";
 import { AddAssetForm } from "@/app/onboarding/AddAssetForm";
 import { BulkAddTable } from "@/app/onboarding/BulkAddTable";
@@ -81,7 +82,9 @@ function LogTradeForm() {
 }
 
 export function AddTradeModal({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
   const [mode, setMode] = useState<"add" | "bulk" | "trade">("add");
+  const done = () => { router.refresh(); onClose(); };
   const tab = (m: "add" | "bulk" | "trade", label: string) => (
     <button onClick={() => setMode(m)} style={{ padding: "8px 4px", fontSize: 14, fontWeight: mode === m ? 700 : 500, color: mode === m ? "var(--ink)" : "var(--ink-3)", background: "none", border: "none", borderBottom: `2px solid ${mode === m ? "var(--ink)" : "transparent"}`, cursor: "pointer", fontFamily: "var(--font-sans)" }}>{label}</button>
   );
@@ -102,7 +105,7 @@ export function AddTradeModal({ onClose }: { onClose: () => void }) {
               <AddAssetForm redirectTo="/dashboard" />
             </>
           ) : mode === "bulk" ? (
-            <BulkAddTable />
+            <BulkAddTable onDone={done} />
           ) : (
             <LogTradeForm />
           )}

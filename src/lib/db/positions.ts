@@ -210,8 +210,13 @@ export interface BulkRow {
   acquiredDate?: string;
 }
 
-/** Server action: add several market positions at once (the bulk table). */
-export async function addPositionsBulk(rows: BulkRow[]) {
+/**
+ * Server action: add several market positions at once (the bulk table).
+ * `doRedirect` true (onboarding) navigates to the dashboard; false (the
+ * in-app modal) just revalidates and returns the count so the caller can
+ * refresh + close itself.
+ */
+export async function addPositionsBulk(rows: BulkRow[], doRedirect = true): Promise<number> {
   const supabase = await createClient();
   const user = await requireUser(supabase);
   let added = 0;
@@ -228,7 +233,8 @@ export async function addPositionsBulk(rows: BulkRow[]) {
     added++;
   }
   revalidatePath("/dashboard");
-  redirect(added > 0 ? `/dashboard` : "/onboarding?error=Add+at+least+one+row");
+  if (doRedirect) redirect(added > 0 ? `/dashboard` : "/onboarding?error=Add+at+least+one+row");
+  return added;
 }
 
 const CHAINS: Record<string, { ticker: string; name: string }> = {

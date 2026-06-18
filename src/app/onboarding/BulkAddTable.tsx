@@ -11,7 +11,7 @@ const blank = (): Row => ({ cls: "crypto", ticker: "", qty: "", cost: "", date: 
 const cell: React.CSSProperties = { width: "100%", padding: "8px 9px", border: "1px solid var(--border-strong, #D8DADD)", borderRadius: 7, fontSize: 12.5, fontFamily: "inherit", background: "var(--surface-2, #FBFBFC)", color: "var(--ink, #15171A)", boxSizing: "border-box" };
 const muted = "var(--ink-3, #8A9099)";
 
-export function BulkAddTable() {
+export function BulkAddTable({ onDone }: { onDone?: () => void } = {}) {
   const [rows, setRows] = useState<Row[]>([blank(), blank(), blank()]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -41,7 +41,13 @@ export function BulkAddTable() {
         setPending(false);
         return;
       }
-      await addPositionsBulk(payload); // redirects on success
+      if (onDone) {
+        // in-app modal: add without redirect, then let the parent refresh + close
+        await addPositionsBulk(payload, false);
+        onDone();
+      } else {
+        await addPositionsBulk(payload); // onboarding: redirects on success
+      }
     } catch {
       setError("Something went wrong — please try again.");
       setPending(false);
