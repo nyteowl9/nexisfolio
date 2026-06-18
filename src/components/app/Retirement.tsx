@@ -255,16 +255,17 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
   const [inflation, setInflation] = useState(r0.inflation);
   const [coastAge, setCoastAge] = useState(r0.coastAge);
   const [includeHome, setIncludeHome] = useState(r0.includeHome);
-  const [overrides, setOverrides] = useState<Record<string, number>>({});
+  const [overrides, setOverrides] = useState<Record<string, number>>(r0.overrides ?? {});
   const [showMC, setShowMC] = useState(true);
 
   // Persist the levers (debounced) so they survive navigation.
+  const ovStr = JSON.stringify(overrides);
   useEffect(() => {
     const id = setTimeout(() => {
-      update({ retirement: { method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome } });
+      update({ retirement: { method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome, overrides } });
     }, 600);
     return () => clearTimeout(id);
-  }, [method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome, ovStr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyMethod = (mth: "traditional" | "coast" | "fire") => { setMethod(mth); setRetireAge(mth === "fire" ? 50 : 65); };
 

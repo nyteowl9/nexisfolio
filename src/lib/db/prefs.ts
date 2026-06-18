@@ -14,6 +14,7 @@ export interface RetirementPrefs {
   inflation: number;
   coastAge: number;
   includeHome: boolean;
+  overrides: Record<string, number>;
 }
 
 export interface Prefs {
@@ -39,6 +40,7 @@ export const DEFAULT_RETIREMENT: RetirementPrefs = {
   inflation: 3,
   coastAge: 55,
   includeHome: false,
+  overrides: {},
 };
 
 export const DEFAULT_PREFS: Prefs = {
