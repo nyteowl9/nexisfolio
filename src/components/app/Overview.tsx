@@ -26,6 +26,7 @@ import { Bolt, ArrowUp, ArrowDown, Chevron, Refresh } from "@/components/ui/icon
 import { refreshPrices } from "@/lib/db/refresh";
 import { usePrefs } from "@/components/app/prefs-context";
 import type { Liability } from "@/lib/db/liabilities";
+import type { Performance } from "@/lib/db/performance";
 
 const LIQUID_CLASSES = new Set<AssetClass>(["crypto", "stocks", "cash", "metals"]);
 
@@ -136,9 +137,58 @@ function UpdatePricesBtn() {
 
 const SPARK_DAYS: Record<Range, number> = { "1D": 1, "1W": 7, "1M": 30, "1Y": 365, ALL: 99999 };
 
-export function Overview({ positions, history, debt = 0, liabilities = [] }: { positions: Position[]; history?: { date: string; net: number }[]; debt?: number; liabilities?: Liability[] }) {
+interface TreeItem { key: AssetClass; label: string; color: string; value: number }
+type Box = TreeItem & { x: number; y: number; w: number; h: number };
+function squarify(items: TreeItem[], x: number, y: number, w: number, h: number): Box[] {
+  if (!items.length) return [];
+  if (items.length === 1) return [{ ...items[0], x, y, w, h }];
+  const total = items.reduce((s, i) => s + i.value, 0);
+  let acc = 0, i = 0;
+  for (; i < items.length - 1; i++) { if (acc + items[i].value >= total / 2) { i++; break; } acc += items[i].value; }
+  const a = items.slice(0, i), b = items.slice(i);
+  const aVal = a.reduce((s, it) => s + it.value, 0);
+  if (w >= h) { const aw = w * (aVal / total); return [...squarify(a, x, y, aw, h), ...squarify(b, x + aw, y, w - aw, h)]; }
+  const ah = h * (aVal / total); return [...squarify(a, x, y, w, ah), ...squarify(b, x, y + ah, w, h - ah)];
+}
+
+function Treemap({ data, total, activeKey, onSlice }: { data: TreeItem[]; total: number; activeKey: AssetClass | null; onSlice: (k: AssetClass | null) => void }) {
+  const W = 760, H = 260;
+  const boxes = squarify(data.slice().sort((a, b) => b.value - a.value), 0, 0, W, H);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+      {boxes.map((b) => {
+        const pct = total ? (b.value / total) * 100 : 0;
+        const big = b.w > 78 && b.h > 38;
+        return (
+          <g key={b.key} onMouseEnter={() => onSlice(b.key)} onMouseLeave={() => onSlice(null)} onClick={() => onSlice(activeKey === b.key ? null : b.key)} style={{ cursor: "pointer" }}>
+            <rect x={b.x + 2} y={b.y + 2} width={Math.max(0, b.w - 4)} height={Math.max(0, b.h - 4)} rx={8} fill={b.color} opacity={activeKey && activeKey !== b.key ? 0.4 : 1} />
+            {big && <text x={b.x + 13} y={b.y + 24} fill="#fff" fontSize={12.5} fontWeight={650}>{b.label}</text>}
+            {big && <text x={b.x + 13} y={b.y + 42} fill="#fff" fontSize={12} opacity={0.9} className="num">{fmtUSD(b.value)} · {pct.toFixed(0)}%</text>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function MoverChip({ p }: { p: Position }) {
+  const c = change24(p) ?? 0;
+  const pos = c >= 0;
+  return (
+    <Link href={`/detail/${p.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8, background: "var(--surface-2)", border: "var(--hair) solid var(--border)", color: "var(--ink)" }}>
+      <AssetIcon cls={p.cls} ticker={p.ticker} name={p.name} size={18} />
+      <span style={{ fontSize: 12.5, fontWeight: 600 }}>{p.ticker && p.ticker !== "—" ? p.ticker : p.name}</span>
+      <span className="num" style={{ fontSize: 12.5, fontWeight: 600, color: pos ? "var(--pos)" : "var(--neg)", display: "inline-flex", alignItems: "center", gap: 2 }}>
+        {pos ? <ArrowUp size={11} /> : <ArrowDown size={11} />}{fmtPct(c, true)}
+      </span>
+    </Link>
+  );
+}
+
+export function Overview({ positions, history, debt = 0, liabilities = [], performance }: { positions: Position[]; history?: { date: string; net: number }[]; debt?: number; liabilities?: Liability[]; performance?: Performance | null }) {
   const { prefs } = usePrefs();
   const useBars = prefs.allocChart === "bars";
+  const useTree = prefs.allocChart === "treemap";
   const [active, setActive] = useState<AssetClass | null>(null);
   const [range, setRange] = useState<Range>("1W");
   const t = totals(positions);
@@ -174,6 +224,27 @@ export function Overview({ positions, history, debt = 0, liabilities = [] }: { p
     .map((d) => ({ ...d, positions: cls[d.key].positions.slice().sort((a, b) => mv(b) - mv(a)) }))
     .filter((g) => !active || g.key === active);
 
+  // today's movers (live holdings only)
+  const moverList = positions
+    .filter((p) => isUnitPriced(p.cls) && change24(p) != null)
+    .sort((a, b) => (change24(b) ?? 0) - (change24(a) ?? 0));
+  const gainers = moverList.filter((p) => (change24(p) ?? 0) > 0).slice(0, 2);
+  const losers = moverList.filter((p) => (change24(p) ?? 0) < 0).slice(-2).reverse();
+
+  // net-worth growth split: what you put in (cost basis) vs market gains
+  const gains = t.net - t.basis;
+  const contribPct = t.net > 0 ? Math.max(0, Math.min(100, (t.basis / t.net) * 100)) : 0;
+
+  // holdings price-return vs S&P 500 over the selected range
+  let bench: { port: number; sp: number } | null = null;
+  if (performance && performance.port.length > 1) {
+    const n = performance.port.length;
+    const startIdx = SPARK_DAYS[range] >= 9999 ? 0 : Math.max(0, n - 1 - SPARK_DAYS[range]);
+    const p0 = performance.port[startIdx], p1 = performance.port[n - 1];
+    const s0 = performance.sp[startIdx], s1 = performance.sp[n - 1];
+    if (p0 > 0 && s0 > 0) bench = { port: (p1 / p0 - 1) * 100, sp: (s1 / s0 - 1) * 100 };
+  }
+
   return (
     <div className="nw-page" style={{ maxWidth: 1240, margin: "0 auto", padding: "32px 36px 64px" }}>
       {/* hero */}
@@ -191,6 +262,17 @@ export function Overview({ positions, history, debt = 0, liabilities = [] }: { p
               <Bolt size={13} /> markets live
             </span>
           </div>
+          {bench && (
+            <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 10, fontSize: 12.5, background: "var(--surface-2)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "6px 11px" }}>
+              <span style={{ color: "var(--ink-3)" }}>{range} return</span>
+              <span className="num" style={{ fontWeight: 700, color: bench.port >= 0 ? "var(--pos)" : "var(--neg)" }}>You {fmtPct(bench.port, true)}</span>
+              <span style={{ color: "var(--ink-3)" }}>vs</span>
+              <span className="num" style={{ fontWeight: 600, color: "var(--ink-2)" }}>S&amp;P {fmtPct(bench.sp, true)}</span>
+              <span className="num" style={{ fontWeight: 600, color: bench.port - bench.sp >= 0 ? "var(--pos)" : "var(--neg)" }}>
+                ({bench.port - bench.sp >= 0 ? "+" : "−"}{Math.abs(bench.port - bench.sp).toFixed(1)} pts)
+              </span>
+            </div>
+          )}
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ marginBottom: 8 }}>
@@ -220,9 +302,40 @@ export function Overview({ positions, history, debt = 0, liabilities = [] }: { p
         <MetricCard label="Total P / L" value={(t.pl >= 0 ? "+" : "−") + fmtUSD(Math.abs(t.pl))} sub={fmtPct(t.plPct, true)} subColor={t.pl >= 0 ? "var(--pos)" : "var(--neg)"} />
       </div>
 
+      {/* movers + growth split */}
+      {(moverList.length > 0 || t.basis > 0) && (
+        <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
+          <div style={{ ...card, padding: "15px 19px" }}>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 500, marginBottom: 11 }}>Today&rsquo;s movers</div>
+            {moverList.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>No live holdings yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {gainers.map((p) => <MoverChip key={p.id} p={p} />)}
+                {losers.map((p) => <MoverChip key={p.id} p={p} />)}
+              </div>
+            )}
+          </div>
+          <div style={{ ...card, padding: "15px 19px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 11 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 500 }}>How your wealth was built</span>
+              <span className="num" style={{ fontSize: 12.5, fontWeight: 600, color: gains >= 0 ? "var(--pos)" : "var(--neg)" }}>{gains >= 0 ? "+" : "−"}{fmtUSD(Math.abs(gains))} gains</span>
+            </div>
+            <div style={{ display: "flex", height: 12, borderRadius: 99, overflow: "hidden", background: "var(--bg-sunk)" }}>
+              <div style={{ width: `${contribPct}%`, background: "var(--ink-3)" }} />
+              <div style={{ width: `${100 - contribPct}%`, background: gains >= 0 ? "var(--pos)" : "var(--neg)" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11.5, color: "var(--ink-3)" }}>
+              <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: "var(--ink-3)", marginRight: 5 }} />You added {fmtUSD(t.basis)}</span>
+              <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: gains >= 0 ? "var(--pos)" : "var(--neg)", marginRight: 5 }} />Market {gains >= 0 ? "gains" : "losses"} {fmtUSD(Math.abs(gains))}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* allocation */}
-      <div className="nw-stack-2" style={{ ...card, padding: "24px 28px", marginBottom: 18, display: "grid", gridTemplateColumns: useBars ? "1fr" : "220px 1fr", gap: 40, alignItems: "center" }}>
-        {!useBars && (
+      <div className="nw-stack-2" style={{ ...card, padding: "24px 28px", marginBottom: 18, display: "grid", gridTemplateColumns: (useBars || useTree) ? "1fr" : "220px 1fr", gap: useTree ? 20 : 40, alignItems: "center" }}>
+        {!useBars && !useTree && (
           <div style={{ display: "flex", justifyContent: "center" }}>
             <Donut
               data={donutData}
@@ -236,6 +349,7 @@ export function Overview({ positions, history, debt = 0, liabilities = [] }: { p
             />
           </div>
         )}
+        {useTree && <Treemap data={donutData} total={t.net} activeKey={active} onSlice={setActive} />}
         <div style={{ display: "flex", flexDirection: "column", gap: 2, width: "100%" }}>
           {donutData.map((d) => {
             const pct = (d.value / t.net) * 100;

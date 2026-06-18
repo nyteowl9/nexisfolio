@@ -58,8 +58,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <Row label="Numbers" hint="Abbreviated ($1.2M) or full ($1,200,000).">
             <Seg value={prefs.numbers} options={[{ value: "abbreviated", label: "Abbreviated" }, { value: "full", label: "Full" }]} onChange={(v) => set("numbers", v)} />
           </Row>
-          <Row label="Allocation chart" hint="Donut or horizontal bars on Overview.">
-            <Seg value={prefs.allocChart} options={["donut", "bars"]} onChange={(v) => set("allocChart", v)} />
+          <Row label="Allocation chart" hint="Donut, bars, or treemap on Overview.">
+            <Seg value={prefs.allocChart} options={[{ value: "donut", label: "Donut" }, { value: "bars", label: "Bars" }, { value: "treemap", label: "Treemap" }]} onChange={(v) => set("allocChart", v)} />
           </Row>
 
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em", paddingTop: 22 }}>Tax</div>

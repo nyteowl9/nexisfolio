@@ -8,6 +8,7 @@ import { ClearPortfolioButton } from "@/components/app/ClearPortfolioButton";
 import { recordSnapshot } from "@/lib/db/snapshots";
 import { refreshStalePrices } from "@/lib/db/refresh";
 import { reconstructNetWorth } from "@/lib/db/networth-history";
+import { marketPerformance } from "@/lib/db/performance";
 import { getLiabilities, debtTotal } from "@/lib/db/liabilities";
 import { totals } from "@/lib/engine";
 import { Overview } from "@/components/app/Overview";
@@ -55,10 +56,11 @@ export default async function DashboardPage() {
   }
 
   const history = await reconstructNetWorth(supabase, positions, liabilities);
+  const performance = await marketPerformance(positions);
 
   return (
     <>
-      <Overview positions={positions} history={history} debt={debt} liabilities={liabilities} />
+      <Overview positions={positions} history={history} debt={debt} liabilities={liabilities} performance={performance} />
       <LiabilitiesCard liabilities={liabilities} positions={positions} />
       <div className="nw-page" style={{ maxWidth: 1240, margin: "0 auto", padding: "0 36px 56px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <Link href="/onboarding" style={{ background: "var(--surface)", color: "var(--ink)", border: "var(--hair) solid var(--border)", padding: "8px 16px", borderRadius: 999, fontSize: 13, fontWeight: 500 }}>

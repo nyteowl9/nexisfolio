@@ -24,7 +24,7 @@ export interface RetirementPrefs {
 export interface Prefs {
   theme: "light" | "dark";
   accent: string;
-  allocChart: "donut" | "bars";
+  allocChart: "donut" | "bars" | "treemap";
   costBasis: AccountingMethod;
   showNews: boolean;
   numbers: "abbreviated" | "full";
