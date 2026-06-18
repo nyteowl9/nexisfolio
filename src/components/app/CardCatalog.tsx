@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { priceForGrade, GRADES, fmtUSD, type Grader, type CardPrices } from "@/lib/engine";
 import { CARDS, SEALED, SETS, GAMES } from "@/lib/sample/sample-data";
 import { CardThumb, GradeLadder } from "@/components/ui/CardThumb";
 import { Search, Plus, Check } from "@/components/ui/icons";
 import { addCardItem, type NewCardItem } from "@/lib/db/cards";
+import { BulkCardTable } from "@/components/app/BulkCardTable";
 import type { ProviderCard } from "@/lib/market/cards-provider";
 
 const LIVE_GAMES = new Set(["pkm", "mtg", "op"]);
@@ -206,6 +208,8 @@ function ManualForm({ onAdd, onCancel }: { onAdd: (i: NewCardItem) => void; onCa
 }
 
 export function CardCatalog({ positionId, onClose }: { positionId: string; onClose: () => void }) {
+  const router = useRouter();
+  const [view, setView] = useState<"import" | "search">("import");
   const [q, setQ] = useState("");
   const [game, setGame] = useState("pkm");
   const [type, setType] = useState<"all" | "cards" | "sealed">("all");
@@ -259,9 +263,13 @@ export function CardCatalog({ positionId, onClose }: { positionId: string; onClo
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(10,12,14,.5)" }} />
       <div style={{ position: "relative", width: 980, maxWidth: "100%", height: "88vh", display: "flex", flexDirection: "column", background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: 16, boxShadow: "0 24px 70px rgba(0,0,0,.34)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "var(--hair) solid var(--border)" }}>
-          <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-.01em" }}>Add to collection</div>
-            <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 2 }}>Pokémon & Magic search the full live catalog (real images + prices)</div>
+            <div style={{ display: "inline-flex", gap: 3, background: "var(--bg-sunk)", padding: 3, borderRadius: 8 }}>
+              {(["import", "search"] as const).map((v) => (
+                <button key={v} onClick={() => setView(v)} style={{ padding: "6px 14px", fontSize: 12.5, fontWeight: 600, borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", color: view === v ? "var(--ink)" : "var(--ink-3)", background: view === v ? "var(--surface)" : "transparent", boxShadow: view === v ? "var(--shadow)" : "none" }}>{v === "import" ? "Import list" : "Search catalog"}</button>
+              ))}
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {flash && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "var(--pos)", fontWeight: 600 }}><Check size={14} /> Added</span>}
@@ -269,6 +277,12 @@ export function CardCatalog({ positionId, onClose }: { positionId: string; onClo
             <button onClick={onClose} style={{ background: "var(--bg-sunk)", border: "none", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "var(--ink-2)", fontSize: 16 }}>✕</button>
           </div>
         </div>
+        {view === "import" ? (
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <BulkCardTable positionId={positionId} onAdded={() => router.refresh()} onClose={onClose} />
+          </div>
+        ) : (
+        <>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 24px", borderBottom: "var(--hair) solid var(--border)", flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
             <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus placeholder={`Search e.g. "Charizard", "Ugin", "Pikachu"…`} style={{ ...inputStyle, paddingLeft: 34 }} />
@@ -302,6 +316,8 @@ export function CardCatalog({ positionId, onClose }: { positionId: string; onClo
             {manual ? <ManualForm onAdd={onAdd} onCancel={() => setManual(false)} /> : <ConfigPanel entry={sel} onAdd={onAdd} />}
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

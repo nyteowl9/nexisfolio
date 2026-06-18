@@ -124,6 +124,77 @@ export async function addCardItem(positionId: string, item: NewCardItem) {
   revalidatePath(`/detail/${positionId}`);
 }
 
+/** A row from the spreadsheet-style bulk importer. Value/basis are per-unit. */
+export interface BulkCardRow {
+  name: string;
+  game?: string | null;
+  type: "graded" | "raw" | "sealed";
+  grader?: string | null;
+  grade?: string | null;
+  qty: number;
+  basis: number; // price paid (per unit)
+  value: number; // current value (per unit)
+  acquired?: string;
+}
+
+/** Add many collection line-items at once (sealed boxes, graded singles, raw). */
+export async function addCardItemsBulk(positionId: string, rows: BulkCardRow[]): Promise<number> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  let added = 0;
+  for (const r of rows) {
+    if (!r.name?.trim() || !(r.qty > 0)) continue;
+    const graded = r.type === "graded";
+    const { error } = await supabase.from("card_items").insert({
+      user_id: user.id,
+      position_id: positionId,
+      catalog_id: null,
+      is_manual: true,
+      type: r.type,
+      grader: graded ? r.grader ?? null : null,
+      grade: graded ? r.grade ?? null : null,
+      qty: r.qty,
+      basis: r.basis || 0,
+      acquired_date: r.acquired || null,
+      image_url: null,
+      name: r.name.trim(),
+      game: r.game || null,
+      set_code: null,
+      set_name: null,
+      number: null,
+      manual_value: r.value || 0,
+    });
+    if (error) throw new Error(`add card: ${error.message}`);
+
+    await supabase.from("transactions").insert({
+      user_id: user.id,
+      position_id: positionId,
+      tx_date: r.acquired || new Date().toISOString().slice(0, 10),
+      type: "buy",
+      cls: "private",
+      ticker: null,
+      name: r.name.trim() + (graded ? ` ${r.grader} ${r.grade}` : ""),
+      qty: r.qty,
+      price: r.basis || 0,
+      amount: (r.basis || 0) * r.qty,
+      account: "Cards",
+      source: "manual",
+      note: "Added card",
+    });
+    added++;
+  }
+
+  if (added) await recomputePosition(supabase, positionId, user.id);
+  revalidatePath("/dashboard");
+  revalidatePath("/history");
+  revalidatePath(`/detail/${positionId}`);
+  return added;
+}
+
 export async function removeCardItem(positionId: string, itemId: string) {
   const supabase = await createClient();
   const {
