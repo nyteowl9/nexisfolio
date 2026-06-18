@@ -3,7 +3,11 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isUnitPriced, type AssetClass } from "@/lib/engine";
+import { fetchQuote } from "@/lib/market/quote";
+import { priceKey } from "@/lib/db/portfolio";
+import { insertPosition } from "@/lib/db/positions";
 
 const num = (v: FormDataEntryValue | null) => {
   const n = Number(v);
@@ -93,4 +97,119 @@ export async function logTrade(formData: FormData) {
   revalidatePath("/history");
   revalidatePath(`/detail/${positionId}`);
   redirect(`${back}?traded=${encodeURIComponent(`${side} ${qty} ${pos.ticker ?? pos.name}`)}`);
+}
+
+type PosRow = { id: string; cls: AssetClass; ticker: string | null; name: string; qty: number | null; manual_value: number | null; account: string | null };
+
+/** Draw `amount` (USD) out of a position: sell units (crypto/stock/metal) or
+ *  reduce a cash/manual balance. Returns the dollar amount actually moved. */
+async function drawDown(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string): Promise<number> {
+  if (isUnitPriced(pos.cls)) {
+    const q = await fetchQuote(pos.cls, pos.ticker ?? "");
+    const price = q?.price ?? 0;
+    if (!price) return 0;
+    const want = amount / price;
+    const have = pos.qty ?? 0;
+    const qtySold = Math.min(want, have);
+    if (qtySold <= 0) return 0;
+    const proceeds = qtySold * price;
+
+    const { data: lotsData } = await supabase.from("lots").select("id,qty,price,acquired_date").eq("position_id", pos.id).order("acquired_date", { ascending: true });
+    const lots = (lotsData ?? []) as LotRow[];
+    let remaining = qtySold;
+    const consumed: { qty: number; price: number; date: string }[] = [];
+    for (const l of lots) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, l.qty);
+      consumed.push({ qty: take, price: l.price, date: l.acquired_date });
+      if (take >= l.qty) await supabase.from("lots").delete().eq("id", l.id);
+      else await supabase.from("lots").update({ qty: l.qty - take }).eq("id", l.id);
+      remaining -= take;
+    }
+    await supabase.from("positions").update({ qty: Math.max(0, have - qtySold) }).eq("id", pos.id);
+    await supabase.from("disposals").insert({ user_id: userId, position_id: pos.id, ticker: pos.ticker, cls: pos.cls, qty: qtySold, proceeds, sold_date: date, lot_snapshot: consumed });
+    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "sell", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty: qtySold, price, amount: proceeds, account: pos.account, source: "manual", note: "Converted out" });
+    return proceeds;
+  }
+  // cash / manual
+  const have = pos.manual_value ?? 0;
+  const moved = Math.min(amount, have);
+  await supabase.from("positions").update({ manual_value: Math.max(0, have - moved) }).eq("id", pos.id);
+  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "withdraw", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount: moved, account: pos.account, source: "manual", note: "Converted out" });
+  return moved;
+}
+
+/** Put `amount` (USD) into an existing position: buy units or top up cash. */
+async function addInto(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string) {
+  if (isUnitPriced(pos.cls)) {
+    const q = await fetchQuote(pos.cls, pos.ticker ?? "");
+    const price = q?.price ?? 0;
+    if (!price) return;
+    const qty = amount / price;
+    const { data: lot } = await supabase.from("lots").insert({ user_id: userId, position_id: pos.id, qty, price, acquired_date: date, account: pos.account }).select("id").single();
+    await supabase.from("positions").update({ qty: (pos.qty ?? 0) + qty }).eq("id", pos.id);
+    const admin = createAdminClient();
+    await admin.from("price_cache").upsert({ asset_key: priceKey(pos.cls, pos.ticker ?? ""), price, prev_close: q?.prev ?? price });
+    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, lot_id: lot?.id ?? null, tx_date: date, type: "buy", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty, price, amount, account: pos.account, source: "manual", note: "Converted in" });
+    return;
+  }
+  const have = pos.manual_value ?? 0;
+  await supabase.from("positions").update({ manual_value: have + amount }).eq("id", pos.id);
+  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "deposit", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount, account: pos.account, source: "manual", note: "Converted in" });
+}
+
+/**
+ * Convert one holding into another in a single linked step — e.g. sell cash to
+ * buy Bitcoin, or swap ETH→SOL. Draws `amount` USD out of the source (a real
+ * taxable disposal for crypto/stocks/metals; just a balance change for cash)
+ * and puts the same dollars into the destination (existing or brand-new).
+ */
+export async function convert(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const back = str(formData.get("from")) || "/dashboard";
+  const fromId = str(formData.get("fromId"));
+  const amount = num(formData.get("amount"));
+  const date = str(formData.get("date")) || new Date().toISOString().slice(0, 10);
+  if (!fromId || amount <= 0) redirect(`${back}?error=Pick+a+source+and+amount`);
+
+  const { data: from } = await supabase.from("positions").select("id,cls,ticker,name,qty,manual_value,account").eq("id", fromId).eq("user_id", user.id).single();
+  if (!from) redirect(`${back}?error=Source+not+found`);
+
+  const moved = await drawDown(supabase, user.id, from as PosRow, amount, date);
+  if (moved <= 0) redirect(`${back}?error=Nothing+available+to+convert`);
+
+  const toMode = str(formData.get("toMode")) || "existing";
+  if (toMode === "new") {
+    const cls = str(formData.get("toCls")) as AssetClass;
+    const ticker = str(formData.get("toTicker")).toUpperCase();
+    const providerId = str(formData.get("toProviderId")) || undefined;
+    if (!cls || !ticker) redirect(`${back}?error=Pick+a+destination+asset`);
+    const q = await fetchQuote(cls, ticker, providerId);
+    const price = q?.price ?? 0;
+    if (!price) redirect(`${back}?error=No+price+for+destination`);
+    // insertPosition fetches the live price itself and records the lot, price
+    // cache, buy ledger entry, and merges into an existing same-ticker holding.
+    await insertPosition(supabase, user.id, {
+      cls,
+      name: str(formData.get("toName")) || ticker,
+      ticker,
+      providerId,
+      qty: moved / price,
+      costPerUnit: price,
+      acquiredDate: date,
+    });
+  } else {
+    const toId = str(formData.get("toId"));
+    if (!toId || toId === fromId) redirect(`${back}?error=Pick+a+different+destination`);
+    const { data: to } = await supabase.from("positions").select("id,cls,ticker,name,qty,manual_value,account").eq("id", toId).eq("user_id", user.id).single();
+    if (!to) redirect(`${back}?error=Destination+not+found`);
+    await addInto(supabase, user.id, to as PosRow, moved, date);
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/history");
+  redirect(`${back}?converted=1`);
 }

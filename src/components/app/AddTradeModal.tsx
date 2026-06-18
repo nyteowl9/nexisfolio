@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { fmtUSD, fmtQty, isUnitPriced, type AssetClass } from "@/lib/engine";
 import { AddAssetForm } from "@/app/onboarding/AddAssetForm";
 import { BulkAddTable } from "@/app/onboarding/BulkAddTable";
+import { ConvertForm } from "@/components/app/ConvertForm";
 import { logTrade } from "@/lib/db/trades";
 
 const inputStyle: React.CSSProperties = { width: "100%", padding: "9px 11px", border: "var(--hair) solid var(--border-strong)", borderRadius: 8, fontSize: 13, fontFamily: "var(--font-sans)", background: "var(--surface-2)", color: "var(--ink)", boxSizing: "border-box" };
@@ -83,9 +84,9 @@ function LogTradeForm() {
 
 export function AddTradeModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
-  const [mode, setMode] = useState<"add" | "bulk" | "trade">("add");
+  const [mode, setMode] = useState<"add" | "bulk" | "trade" | "convert">("add");
   const done = () => { router.refresh(); onClose(); };
-  const tab = (m: "add" | "bulk" | "trade", label: string) => (
+  const tab = (m: "add" | "bulk" | "trade" | "convert", label: string) => (
     <button onClick={() => setMode(m)} style={{ padding: "8px 4px", fontSize: 14, fontWeight: mode === m ? 700 : 500, color: mode === m ? "var(--ink)" : "var(--ink-3)", background: "none", border: "none", borderBottom: `2px solid ${mode === m ? "var(--ink)" : "transparent"}`, cursor: "pointer", fontFamily: "var(--font-sans)" }}>{label}</button>
   );
 
@@ -94,7 +95,7 @@ export function AddTradeModal({ onClose }: { onClose: () => void }) {
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(10,12,14,.45)" }} />
       <div style={{ position: "relative", width: 660, maxWidth: "100%", maxHeight: "90vh", overflow: "auto", background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,.3)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px 0" }}>
-          <div style={{ display: "flex", gap: 22 }}>{tab("add", "Add position")}{tab("bulk", "Add multiple")}{tab("trade", "Log trade")}</div>
+          <div style={{ display: "flex", gap: 22 }}>{tab("add", "Add position")}{tab("bulk", "Add multiple")}{tab("trade", "Log trade")}{tab("convert", "Convert")}</div>
           <button onClick={onClose} style={{ background: "var(--bg-sunk)", border: "none", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "var(--ink-2)", fontSize: 17 }}>✕</button>
         </div>
         <div style={{ borderBottom: "var(--hair) solid var(--border)", marginTop: 14 }} />
@@ -106,6 +107,8 @@ export function AddTradeModal({ onClose }: { onClose: () => void }) {
             </>
           ) : mode === "bulk" ? (
             <BulkAddTable onDone={done} />
+          ) : mode === "convert" ? (
+            <ConvertForm />
           ) : (
             <LogTradeForm />
           )}
