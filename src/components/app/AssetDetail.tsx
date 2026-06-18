@@ -12,7 +12,7 @@ import { AssetIcon } from "@/components/ui/AssetIcon";
 import { Back, ArrowUp, ArrowDown, Bolt, Clock } from "@/components/ui/icons";
 import { CardsDetail } from "@/components/app/CardsDetail";
 import { addLot, updateLot, deleteLot } from "@/lib/db/lots";
-import { removePosition } from "@/lib/db/positions";
+import { removePosition, updatePositionValue } from "@/lib/db/positions";
 
 const dInput: React.CSSProperties = { width: "100%", padding: "9px 11px", border: "var(--hair) solid var(--border-strong)", borderRadius: 8, fontSize: 13, fontFamily: "var(--font-sans)", background: "var(--surface-2)", color: "var(--ink)", boxSizing: "border-box" };
 
@@ -50,6 +50,29 @@ function LotDrawer({ positionId, lot, onClose, onSaved }: { positionId: string; 
   );
 }
 
+function ValueDrawer({ p, onClose, onSaved }: { p: Position; onClose: () => void; onSaved: () => void }) {
+  const isCash = p.cls === "cash";
+  const F = ({ label, children }: { label: string; children: React.ReactNode }) => (<label style={{ display: "block" }}><span style={{ fontSize: 11.5, color: "var(--ink-2)", fontWeight: 600, marginBottom: 6, display: "block" }}>{label}</span>{children}</label>);
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 80 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(10,12,14,.45)" }} />
+      <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: 400, maxWidth: "100%", background: "var(--bg)", borderLeft: "var(--hair) solid var(--border)", boxShadow: "-12px 0 40px rgba(0,0,0,.18)", overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: "var(--hair) solid var(--border)", background: "var(--surface)" }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>{isCash ? "Edit balance" : "Edit value"}</span>
+          <button onClick={onClose} style={{ background: "var(--bg-sunk)", border: "none", borderRadius: 7, width: 28, height: 28, cursor: "pointer", color: "var(--ink-2)", fontSize: 15 }}>✕</button>
+        </div>
+        <form action={async (fd) => { await updatePositionValue(fd); onClose(); onSaved(); }} style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 13 }}>
+          <input type="hidden" name="id" value={p.id} />
+          <input type="hidden" name="from" value={`/detail/${p.id}`} />
+          <F label={isCash ? "Current balance" : "Current value"}><input name="value" type="number" step="any" required defaultValue={p.value ?? 0} style={dInput} /></F>
+          {!isCash && <F label="Cost basis (optional)"><input name="costBasis" type="number" step="any" defaultValue={p.basis ?? ""} style={dInput} /></F>}
+          <button style={{ padding: 11, background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 9, fontSize: 13.5, fontWeight: 650, cursor: "pointer", fontFamily: "var(--font-sans)" }}>Save</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 const card: React.CSSProperties = { background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden" };
 const cardHead: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 22px", borderBottom: "var(--hair) solid var(--border)", fontSize: 13.5, fontWeight: 600, color: "var(--ink)" };
 const td = (right?: boolean): React.CSSProperties => ({ padding: "10px 18px", borderTop: "var(--hair) solid var(--border)", fontSize: 13, color: "var(--ink)", textAlign: right ? "right" : "left" });
@@ -75,6 +98,7 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
 function MarketDetail({ p, realized, priceHistory }: { p: Position; realized: number; priceHistory?: number[] | null }) {
   const router = useRouter();
   const [lotDrawer, setLotDrawer] = useState<Lot | "new" | null>(null);
+  const [valueOpen, setValueOpen] = useState(false);
   const value = mv(p), basis = costBasis(p), unreal = value - basis, unrealPct = basis ? (unreal / basis) * 100 : 0;
   const chg = change24(p);
   const unit = isUnitPriced(p.cls);
@@ -92,6 +116,9 @@ function MarketDetail({ p, realized, priceHistory }: { p: Position; realized: nu
             <div className="num" style={{ fontSize: 28, fontWeight: 650, letterSpacing: "-.02em", marginTop: 3 }}>{unit ? fmtUSD(p.price ?? 0, { full: true, cents: true }) : fmtUSD(value, { full: true })}</div>
             {chg != null && <div className="num" style={{ fontSize: 13, fontWeight: 600, color: chg >= 0 ? "var(--pos)" : "var(--neg)", marginTop: 4, display: "inline-flex", alignItems: "center", gap: 4 }}>{chg >= 0 ? <ArrowUp size={13} /> : <ArrowDown size={13} />}{fmtPct(chg, true)} today</div>}
           </div>
+          {!unit && (
+            <button onClick={() => setValueOpen(true)} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)", background: "var(--bg-sunk)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "7px 13px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>{p.cls === "cash" ? "Edit balance" : "Edit value"}</button>
+          )}
         </div>
         <div style={{ padding: "8px 12px 14px" }}><Area points={hist} width={1080} height={150} color={unreal >= 0 ? "var(--pos)" : "var(--neg)"} strokeWidth={2} /></div>
       </div>
@@ -103,7 +130,8 @@ function MarketDetail({ p, realized, priceHistory }: { p: Position; realized: nu
         <div style={{ borderLeft: "var(--hair) solid var(--border)" }}><Stat label="Realized P/L (2026)" value={realized ? (realized >= 0 ? "+" : "−") + fmtUSD(Math.abs(realized)) : "$0"} sub={realized ? "from sales" : "no sales"} color={realized > 0 ? "var(--pos)" : realized < 0 ? "var(--neg)" : "var(--ink)"} /></div>
       </div>
 
-      <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, marginTop: 16, alignItems: "start" }}>
+      <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: p.cls === "cash" ? "1fr" : "1.3fr 1fr", gap: 16, marginTop: 16, alignItems: "start" }}>
+        {p.cls !== "cash" && (
         <div style={card}>
           <div style={cardHead}>
             <span>Tax lots <span style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 450 }}>· FIFO basis · click to edit</span></span>
@@ -128,6 +156,7 @@ function MarketDetail({ p, realized, priceHistory }: { p: Position; realized: nu
             </tbody>
           </table>
         </div>
+        )}
         <div style={card}>
           <div style={cardHead}>Position facts</div>
           <div style={{ padding: "6px 0" }}>
@@ -141,6 +170,7 @@ function MarketDetail({ p, realized, priceHistory }: { p: Position; realized: nu
         </div>
       </div>
       {lotDrawer && <LotDrawer positionId={p.id} lot={lotDrawer} onClose={() => setLotDrawer(null)} onSaved={() => router.refresh()} />}
+      {valueOpen && <ValueDrawer p={p} onClose={() => setValueOpen(false)} onSaved={() => router.refresh()} />}
     </div>
   );
 }

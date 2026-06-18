@@ -332,6 +332,27 @@ export async function removePosition(formData: FormData) {
   redirect(back.startsWith("/") ? back : "/dashboard");
 }
 
+/** Server action: edit a manual-valued position's current value (cash, real
+ *  estate, collectibles). Cash has no lots, so this is how you correct a balance. */
+export async function updatePositionValue(formData: FormData) {
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  const id = str(formData.get("id"));
+  const value = num(formData.get("value"));
+  const costBasis = num(formData.get("costBasis"));
+  const back = str(formData.get("from")) ?? "/dashboard";
+  if (!id || value == null) redirect(back.startsWith("/") ? back : "/dashboard");
+
+  const update: Record<string, unknown> = { manual_value: value, last_valued_date: today() };
+  if (costBasis != null) update.cost_basis_manual = costBasis;
+  await supabase.from("positions").update(update).eq("id", id).eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/history");
+  revalidatePath(`/detail/${id}`);
+  redirect(back.startsWith("/") ? back : "/dashboard");
+}
+
 /** Server action: ensure a Trading Cards position exists, then open its catalog. */
 export async function browseCardCatalog() {
   const supabase = await createClient();
