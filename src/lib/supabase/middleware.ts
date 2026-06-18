@@ -46,6 +46,19 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
+
+  // Root: signed-in → dashboard; everyone else sees the marketing landing,
+  // served at "/" via a rewrite so the address bar stays nexisfolio.com.
+  if (path === "/") {
+    const to = request.nextUrl.clone();
+    if (user) {
+      to.pathname = "/dashboard";
+      return NextResponse.redirect(to);
+    }
+    to.pathname = "/demo/index.html";
+    return NextResponse.rewrite(to);
+  }
+
   const needsAuth = PROTECTED.some((p) => path.startsWith(p));
   if (needsAuth && !user) {
     const redirect = request.nextUrl.clone();
