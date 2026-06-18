@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { syncPositionQty } from "@/lib/db/holdings-sync";
-import { isUnitPriced, type AssetClass } from "@/lib/engine";
+import { reverseOne, type TxRow } from "@/lib/db/tx-reverse";
+import type { AssetClass } from "@/lib/engine";
 
 const str = (v: FormDataEntryValue | null) => {
   const s = typeof v === "string" ? v.trim() : "";
@@ -65,30 +66,26 @@ export async function deleteTransaction(formData: FormData) {
   const id = str(formData.get("id"));
   if (!id) return;
 
-  const { data: tx } = await supabase.from("transactions").select("lot_id,position_id,type,qty,price,amount,tx_date").eq("id", id).single();
-  await supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id);
-  const pid = tx?.position_id as string | undefined;
-  if (!pid) { revalidatePath("/dashboard"); revalidatePath("/history"); return; }
+  const { data: tx } = await supabase.from("transactions").select("id,lot_id,position_id,type,qty,price,amount,tx_date,source").eq("id", id).single();
+  if (!tx) { revalidatePath("/dashboard"); revalidatePath("/history"); return; }
 
-  const { data: pos } = await supabase.from("positions").select("cls,manual_value").eq("id", pid).single();
-  const unit = pos ? isUnitPriced(pos.cls as AssetClass) : false;
-
-  if (tx?.lot_id) {
-    // buy: drop the lot it added
-    await supabase.from("lots").delete().eq("id", tx.lot_id).eq("user_id", user.id);
-  } else if (tx?.type === "sell" && unit) {
-    // sell: put the sold units back and remove the most recent realized disposal
-    await supabase.from("lots").insert({ user_id: user.id, position_id: pid, qty: tx.qty ?? 0, price: tx.price ?? 0, acquired_date: tx.tx_date ?? new Date().toISOString().slice(0, 10) });
-    const { data: disp } = await supabase.from("disposals").select("id").eq("position_id", pid).eq("user_id", user.id).order("sold_date", { ascending: false }).limit(1);
-    if (disp?.[0]) await supabase.from("disposals").delete().eq("id", disp[0].id).eq("user_id", user.id);
-  } else if (!unit && pos) {
-    // cash / manual: reverse the balance change this entry made
-    if (tx?.type === "withdraw") await supabase.from("positions").update({ manual_value: (pos.manual_value ?? 0) + (tx.amount ?? 0) }).eq("id", pid);
-    else if (tx?.type === "deposit") await supabase.from("positions").update({ manual_value: Math.max(0, (pos.manual_value ?? 0) - (tx.amount ?? 0)) }).eq("id", pid);
+  // A conversion writes two linked legs sharing a "convert:<token>" source.
+  // Deleting either leg undoes the whole conversion (both sides).
+  let rows: TxRow[] = [tx as TxRow];
+  const src = tx.source as string | null;
+  if (src && src.startsWith("convert:")) {
+    const { data: grp } = await supabase.from("transactions").select("id,lot_id,position_id,type,qty,price,amount,tx_date").eq("source", src).eq("user_id", user.id);
+    if (grp && grp.length) rows = grp as TxRow[];
   }
 
-  if (unit) await syncPositionQty(supabase, pid, user.id);
+  const pids = new Set<string>();
+  for (const r of rows) {
+    await reverseOne(supabase, user.id, r);
+    await supabase.from("transactions").delete().eq("id", r.id).eq("user_id", user.id);
+    if (r.position_id) pids.add(r.position_id);
+  }
+
   revalidatePath("/dashboard");
   revalidatePath("/history");
-  revalidatePath(`/detail/${pid}`);
+  for (const pid of pids) revalidatePath(`/detail/${pid}`);
 }

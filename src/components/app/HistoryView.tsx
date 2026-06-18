@@ -183,7 +183,7 @@ function TxDrawer({ tx, onClose, onSaved }: { tx: LedgerTx | "new"; onClose: () 
         {e && (
           <form action={async (fd) => { await deleteTransaction(fd); onClose(); onSaved(); }} style={{ padding: "0 22px 22px" }}>
             <input type="hidden" name="id" value={e.id} />
-            <button style={{ width: "100%", padding: 10, background: "var(--bg-sunk)", color: "var(--neg)", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-sans)" }}>Delete transaction</button>
+            <button style={{ width: "100%", padding: 10, background: "var(--bg-sunk)", color: "var(--neg)", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-sans)" }}>{(e.note ?? "").startsWith("Converted") ? "Undo conversion (both legs)" : "Delete transaction"}</button>
           </form>
         )}
       </div>

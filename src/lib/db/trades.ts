@@ -7,7 +7,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isUnitPriced, type AssetClass } from "@/lib/engine";
 import { fetchQuote } from "@/lib/market/quote";
 import { priceKey } from "@/lib/db/portfolio";
-import { insertPosition } from "@/lib/db/positions";
 
 const num = (v: FormDataEntryValue | null) => {
   const n = Number(v);
@@ -105,7 +104,7 @@ type PosRow = { id: string; cls: AssetClass; ticker: string | null; name: string
  *  reduce a cash/manual balance. `override` forces the unit price (for a
  *  historical conversion); otherwise today's live price is used. Returns the
  *  dollar amount actually moved. */
-async function drawDown(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string, override = 0): Promise<number> {
+async function drawDown(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string, override = 0, source = "manual"): Promise<number> {
   if (isUnitPriced(pos.cls)) {
     const price = override > 0 ? override : (await fetchQuote(pos.cls, pos.ticker ?? ""))?.price ?? 0;
     if (!price) return 0;
@@ -129,21 +128,21 @@ async function drawDown(supabase: Awaited<ReturnType<typeof createClient>>, user
     }
     await supabase.from("positions").update({ qty: Math.max(0, have - qtySold) }).eq("id", pos.id);
     await supabase.from("disposals").insert({ user_id: userId, position_id: pos.id, ticker: pos.ticker, cls: pos.cls, qty: qtySold, proceeds, sold_date: date, lot_snapshot: consumed });
-    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "sell", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty: qtySold, price, amount: proceeds, account: pos.account, source: "manual", note: "Converted out" });
+    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "sell", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty: qtySold, price, amount: proceeds, account: pos.account, source, note: "Converted out" });
     return proceeds;
   }
   // cash / manual
   const have = pos.manual_value ?? 0;
   const moved = Math.min(amount, have);
   await supabase.from("positions").update({ manual_value: Math.max(0, have - moved) }).eq("id", pos.id);
-  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "withdraw", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount: moved, account: pos.account, source: "manual", note: "Converted out" });
+  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "withdraw", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount: moved, account: pos.account, source, note: "Converted out" });
   return moved;
 }
 
 /** Put `amount` (USD) into an existing position: buy units or top up cash.
  *  `override` forces the unit (cost-basis) price; the live price cache is only
  *  refreshed when no override is given. */
-async function addInto(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string, override = 0) {
+async function addInto(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string, override = 0, source = "manual") {
   if (isUnitPriced(pos.cls)) {
     const q = override > 0 ? null : await fetchQuote(pos.cls, pos.ticker ?? "");
     const price = override > 0 ? override : q?.price ?? 0;
@@ -155,12 +154,12 @@ async function addInto(supabase: Awaited<ReturnType<typeof createClient>>, userI
       const admin = createAdminClient();
       await admin.from("price_cache").upsert({ asset_key: priceKey(pos.cls, pos.ticker ?? ""), price, prev_close: q.prev ?? price });
     }
-    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, lot_id: lot?.id ?? null, tx_date: date, type: "buy", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty, price, amount, account: pos.account, source: "manual", note: "Converted in" });
+    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, lot_id: lot?.id ?? null, tx_date: date, type: "buy", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty, price, amount, account: pos.account, source, note: "Converted in" });
     return;
   }
   const have = pos.manual_value ?? 0;
   await supabase.from("positions").update({ manual_value: have + amount }).eq("id", pos.id);
-  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "deposit", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount, account: pos.account, source: "manual", note: "Converted in" });
+  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "deposit", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount, account: pos.account, source, note: "Converted in" });
 }
 
 /**
@@ -185,7 +184,10 @@ export async function convert(formData: FormData) {
   const { data: from } = await supabase.from("positions").select("id,cls,ticker,name,qty,manual_value,account").eq("id", fromId).eq("user_id", user.id).single();
   if (!from) redirect(`${back}?error=Source+not+found`);
 
-  const moved = await drawDown(supabase, user.id, from as PosRow, amount, date, fromPrice);
+  // Shared token links both legs so deleting either one undoes the whole thing.
+  const grp = `convert:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+
+  const moved = await drawDown(supabase, user.id, from as PosRow, amount, date, fromPrice, grp);
   if (moved <= 0) redirect(`${back}?error=Nothing+available+to+convert`);
 
   const toMode = str(formData.get("toMode")) || "existing";
@@ -194,25 +196,22 @@ export async function convert(formData: FormData) {
     const ticker = str(formData.get("toTicker")).toUpperCase();
     const providerId = str(formData.get("toProviderId")) || undefined;
     if (!cls || !ticker) redirect(`${back}?error=Pick+a+destination+asset`);
-    const live = toPrice > 0 ? toPrice : (await fetchQuote(cls, ticker, providerId))?.price ?? 0;
-    if (!live) redirect(`${back}?error=No+price+for+destination`);
-    // insertPosition refreshes the live price cache itself; costPerUnit is the
-    // conversion price (override or live), and it merges same-ticker holdings.
-    await insertPosition(supabase, user.id, {
-      cls,
-      name: str(formData.get("toName")) || ticker,
-      ticker,
-      providerId,
-      qty: moved / live,
-      costPerUnit: live,
-      acquiredDate: date,
-    });
+    // Merge into an existing same-ticker holding, or create one, then buy into it
+    // (so the buy leg carries the convert token).
+    const { data: existing } = await supabase.from("positions").select("id,cls,ticker,name,qty,manual_value,account").eq("user_id", user.id).eq("cls", cls).eq("ticker", ticker).limit(1).maybeSingle();
+    let target = existing as PosRow | null;
+    if (!target) {
+      const { data: created, error } = await supabase.from("positions").insert({ user_id: user.id, cls, ticker, name: str(formData.get("toName")) || ticker, is_live: true, qty: 0 }).select("id,cls,ticker,name,qty,manual_value,account").single();
+      if (error || !created) redirect(`${back}?error=Could+not+create+destination`);
+      target = created as PosRow;
+    }
+    await addInto(supabase, user.id, target!, moved, date, toPrice, grp);
   } else {
     const toId = str(formData.get("toId"));
     if (!toId || toId === fromId) redirect(`${back}?error=Pick+a+different+destination`);
     const { data: to } = await supabase.from("positions").select("id,cls,ticker,name,qty,manual_value,account").eq("id", toId).eq("user_id", user.id).single();
     if (!to) redirect(`${back}?error=Destination+not+found`);
-    await addInto(supabase, user.id, to as PosRow, moved, date, toPrice);
+    await addInto(supabase, user.id, to as PosRow, moved, date, toPrice, grp);
   }
 
   revalidatePath("/dashboard");
