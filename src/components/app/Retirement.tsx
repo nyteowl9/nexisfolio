@@ -345,6 +345,14 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
   const realPct = (m.safeAccReal * 100).toFixed(1);
   const safeSub = safe == null ? `Even retiring late, your assumptions can’t safely cover ${fmtUSD(m.annualSpend)}/yr to ${m.endAge}. Try a higher growth scenario, lower spend, or more saving.` : safeNow ? `You could stop working today (age ${currentAge}) and the money lasts to ${m.endAge} — at your ${realPct}% real return (after ${inflation}% inflation), de-risked in retirement.` : `Earliest age you can retire and have the money last to ${m.endAge}, at your ${realPct}% real return (after ${inflation}% inflation), de-risked in retirement.`;
 
+  // One plain-English takeaway for the whole plan.
+  const conf = mc ? ` with ${mc.successRate}% confidence` : "";
+  const summary = safe == null
+    ? `On these assumptions your savings can’t safely cover ${fmtUSD(annualSpend)}/yr to ${m.endAge}. Try saving more, spending less, or a higher-growth mix.`
+    : safeNow
+      ? `Good news — you could retire now and spend ${fmtUSD(annualSpend)}/yr to age ${m.endAge}${conf}.`
+      : `On your plan you can retire at ${safe} and spend ${fmtUSD(annualSpend)}/yr to age ${m.endAge}${conf}.`;
+
   const kv = (k: string, v: string, color?: string) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
       <span style={{ fontSize: 13, color: "var(--ink-3)" }}>{k}</span>
@@ -375,6 +383,10 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
             {showMC ? "Uncertainty band on" : "Uncertainty band off"}
           </button>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 18, fontSize: 19, fontWeight: 600, letterSpacing: "-.01em", lineHeight: 1.4, color: "var(--ink)" }}>
+        {summary}
       </div>
 
       <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", ...card, marginBottom: 18 }}>
