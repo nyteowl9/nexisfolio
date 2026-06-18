@@ -192,20 +192,43 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
   const fireAge = ageHitting(investable, o.monthly);
   const fireAgeUp = ageHitting(investable * 1.1, o.monthly);
 
-  const consBlended = blendedCAGR(SCENARIOS.Conservative, invest);
-  const realCons = real(consBlended);
-  const rmC = Math.pow(1 + realCons, 1 / 12) - 1;
-  const rmCdraw = Math.pow(1 + realCons * 0.7, 1 / 12) - 1;
-  const safeWR = Math.min(o.withdrawalRate, 3.5);
+  // True Coast-FIRE age: the earliest age you can STOP saving and still have
+  // the balance compound to `target` by retirement (no more contributions).
+  // This is the number Coast FIRE is really about — the slider is a what-if.
+  function balAtRetireStoppingAt(stopAge: number): number {
+    let bal = investable;
+    for (let age = o.currentAge; age < o.retireAge; age++)
+      for (let mo = 0; mo < 12; mo++) {
+        bal = bal * (1 + rmAcc);
+        if (age < stopAge) bal += o.monthly;
+      }
+    return bal;
+  }
+  let earliestCoastAge: number | null = null;
+  for (let A = o.currentAge; A <= o.retireAge; A++) {
+    if (balAtRetireStoppingAt(A) >= target) { earliestCoastAge = A; break; }
+  }
+
+  // "Safe age" stress test — uses YOUR scenario (in real, after-inflation
+  // terms) so it's consistent with the rest of the plan, with a modest
+  // de-risk in retirement (you shift toward bonds/cash as you draw down).
+  // All figures are real, and retirement spend is constant real dollars.
+  const consBlended = blendedCAGR(SCENARIOS.Conservative, invest); // kept for reference
+  const safeAccReal = realBlended;
+  const safeDrawReal = realBlended * 0.85;
+  const rmSafeAcc = Math.pow(1 + safeAccReal, 1 / 12) - 1;
+  const rmSafeDraw = Math.pow(1 + safeDrawReal, 1 / 12) - 1;
   function survivesRetiringAt(R: number): boolean {
     let bal = investable;
     for (let age = o.currentAge; age < R; age++)
-      for (let mo = 0; mo < 12; mo++) bal = bal * (1 + rmC) + o.monthly;
-    const safeNeed = o.annualSpend;
+      for (let mo = 0; mo < 12; mo++) {
+        bal = bal * (1 + rmSafeAcc);
+        if (age < coastStop) bal += o.monthly;
+      }
     for (let age = R; age <= o.endAge; age++) {
       for (let mo = 0; mo < 12; mo++) {
-        bal = bal * (1 + rmCdraw);
-        let need = safeNeed;
+        bal = bal * (1 + rmSafeDraw);
+        let need = o.annualSpend;
         if (o.otherIncome > 0 && age >= o.otherIncomeAge) need = Math.max(0, need - o.otherIncome);
         bal -= need / 12;
       }
@@ -220,7 +243,7 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
       break;
     }
   }
-  const safeNumber = o.annualSpend * (100 / safeWR);
+  const safeNumber = o.annualSpend * (100 / Math.min(o.withdrawalRate, 3.5));
   const sustainableSpend = projWithContrib * (o.withdrawalRate / 100);
 
   const sectors: RetirementSector[] = (Object.keys(invest) as AssetClass[])
@@ -249,6 +272,7 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
     coastStop,
     coastNumber,
     coastAchieved,
+    earliestCoastAge,
     projWithContrib,
     projCoast,
     fireAge,
@@ -257,6 +281,8 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
     safeNumber,
     consBlended,
     realBlended,
+    safeAccReal,
+    safeDrawReal,
     sustainableSpend,
     depletionAge,
     neverDepletes,

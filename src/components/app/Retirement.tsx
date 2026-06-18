@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   retirement,
   retirementMC,
@@ -9,6 +9,7 @@ import {
   type RetirementOpts,
 } from "@/lib/engine";
 import { Bolt, Plus } from "@/components/ui/icons";
+import { usePrefs } from "@/components/app/prefs-context";
 
 type M = ReturnType<typeof retirement>;
 type MC = ReturnType<typeof retirementMC>;
@@ -240,20 +241,30 @@ function Milestones({ m }: { m: M }) {
 }
 
 export function RetirementPlanner({ positions }: { positions: Position[] }) {
-  const [method, setMethod] = useState<"traditional" | "coast" | "fire">("coast");
-  const [scenario, setScenario] = useState("Base");
-  const [currentAge, setCurrentAge] = useState(40);
-  const [retireAge, setRetireAge] = useState(65);
-  const [annualSpend, setSpend] = useState(120000);
-  const [monthly, setMonthly] = useState(8000);
-  const [target, setTarget] = useState(3000000);
-  const [customGoal, setCustomGoal] = useState(false);
-  const [withdrawalRate, setWR] = useState(4);
-  const [inflation, setInflation] = useState(3);
-  const [coastAge, setCoastAge] = useState(55);
-  const [includeHome, setIncludeHome] = useState(false);
+  const { prefs, update } = usePrefs();
+  const r0 = prefs.retirement;
+  const [method, setMethod] = useState<"traditional" | "coast" | "fire">(r0.method);
+  const [scenario, setScenario] = useState(r0.scenario);
+  const [currentAge, setCurrentAge] = useState(r0.currentAge);
+  const [retireAge, setRetireAge] = useState(r0.retireAge);
+  const [annualSpend, setSpend] = useState(r0.annualSpend);
+  const [monthly, setMonthly] = useState(r0.monthly);
+  const [target, setTarget] = useState(r0.target);
+  const [customGoal, setCustomGoal] = useState(r0.customGoal);
+  const [withdrawalRate, setWR] = useState(r0.withdrawalRate);
+  const [inflation, setInflation] = useState(r0.inflation);
+  const [coastAge, setCoastAge] = useState(r0.coastAge);
+  const [includeHome, setIncludeHome] = useState(r0.includeHome);
   const [overrides, setOverrides] = useState<Record<string, number>>({});
   const [showMC, setShowMC] = useState(true);
+
+  // Persist the levers (debounced) so they survive navigation.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      update({ retirement: { method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome } });
+    }, 600);
+    return () => clearTimeout(id);
+  }, [method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyMethod = (mth: "traditional" | "coast" | "fire") => { setMethod(mth); setRetireAge(mth === "fire" ? 50 : 65); };
 
@@ -272,7 +283,8 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
   const safeNow = safe != null && safe <= currentAge;
   const safeBig = safe == null ? "—" : safeNow ? "Now" : String(safe);
   const safePrefix = safe != null && !safeNow ? "AGE" : null;
-  const safeSub = safe == null ? `Even retiring late, a conservative plan can’t safely cover ${fmtUSD(m.annualSpend)}/yr to ${m.endAge}.` : safeNow ? `You could stop working today (age ${currentAge}) and the money lasts to ${m.endAge} on conservative ${(m.consBlended * 100).toFixed(1)}% returns.` : `Earliest age you can retire and still have the money last to ${m.endAge} on conservative ${(m.consBlended * 100).toFixed(1)}% returns.`;
+  const realPct = (m.safeAccReal * 100).toFixed(1);
+  const safeSub = safe == null ? `Even retiring late, your assumptions can’t safely cover ${fmtUSD(m.annualSpend)}/yr to ${m.endAge}. Try a higher growth scenario, lower spend, or more saving.` : safeNow ? `You could stop working today (age ${currentAge}) and the money lasts to ${m.endAge} — at your ${realPct}% real return (after ${inflation}% inflation), de-risked in retirement.` : `Earliest age you can retire and have the money last to ${m.endAge}, at your ${realPct}% real return (after ${inflation}% inflation), de-risked in retirement.`;
 
   const kv = (k: string, v: string, color?: string) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -345,7 +357,18 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
             </div>
             <Slider label="Current age" value={currentAge} min={25} max={60} step={1} onChange={setCurrentAge} />
             <Slider label={method === "fire" ? "Retire age (early)" : "Retire age"} value={retireAge} min={method === "fire" ? 40 : 55} max={method === "fire" ? 60 : 72} step={1} onChange={setRetireAge} />
-            {method === "coast" && <Slider label="Stop-saving (coast) age" value={Math.min(coastAge, retireAge)} min={currentAge + 1} max={retireAge} step={1} onChange={setCoastAge} hint="After this age you add $0 and let it compound." />}
+            {method === "coast" && (
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-2)", background: "var(--bg-sunk)", borderRadius: 8, padding: "9px 11px", marginBottom: 11, lineHeight: 1.45 }}>
+                  {m.earliestCoastAge == null
+                    ? <>At {fmtUSD(monthly, { full: true })}/mo you don’t reach {fmtUSD(m.target)} by {retireAge} even saving the whole way. Save more, retire later, or raise growth.</>
+                    : m.earliestCoastAge <= currentAge
+                      ? <><b style={{ color: "var(--pos)" }}>You can coast now.</b> Your balance already compounds to {fmtUSD(m.target)} by {retireAge} with $0 more saved.</>
+                      : <><b style={{ color: "var(--ink)" }}>Calculated coast age: {m.earliestCoastAge}.</b> Save until then and you can stop — it compounds to {fmtUSD(m.target)} by {retireAge}.</>}
+                </div>
+                <Slider label="Stop-saving age (what-if)" value={Math.min(coastAge, retireAge)} min={currentAge + 1} max={retireAge} step={1} onChange={setCoastAge} hint="Model stopping earlier or later than the calculated age above." />
+              </div>
+            )}
             <Slider label="Monthly contribution" value={monthly} min={0} max={40000} step={500} onChange={setMonthly} fmt={(v) => fmtUSD(v, { full: true })} />
             <Slider label="Annual spend in retirement" value={annualSpend} min={40000} max={400000} step={10000} onChange={setSpend} fmt={(v) => fmtUSD(v)} />
             <Slider label="Withdrawal rate" value={withdrawalRate} min={3} max={6} step={0.25} onChange={setWR} fmt={(v) => v + "%"} hint="4% is the classic safe rate. Lower = safer." />
