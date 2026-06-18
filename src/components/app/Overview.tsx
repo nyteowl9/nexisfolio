@@ -25,6 +25,9 @@ import { AssetIcon } from "@/components/ui/AssetIcon";
 import { Bolt, ArrowUp, ArrowDown, Chevron, Refresh } from "@/components/ui/icons";
 import { refreshPrices } from "@/lib/db/refresh";
 import { usePrefs } from "@/components/app/prefs-context";
+import type { Liability } from "@/lib/db/liabilities";
+
+const LIQUID_CLASSES = new Set<AssetClass>(["crypto", "stocks", "cash", "metals"]);
 
 const COLS = "1fr 104px 64px 64px 112px 116px 128px 16px";
 const card: React.CSSProperties = {
@@ -133,7 +136,7 @@ function UpdatePricesBtn() {
 
 const SPARK_DAYS: Record<Range, number> = { "1D": 1, "1W": 7, "1M": 30, "1Y": 365, ALL: 99999 };
 
-export function Overview({ positions, history, debt = 0 }: { positions: Position[]; history?: { date: string; net: number }[]; debt?: number }) {
+export function Overview({ positions, history, debt = 0, liabilities = [] }: { positions: Position[]; history?: { date: string; net: number }[]; debt?: number; liabilities?: Liability[] }) {
   const { prefs } = usePrefs();
   const useBars = prefs.allocChart === "bars";
   const [active, setActive] = useState<AssetClass | null>(null);
@@ -141,6 +144,20 @@ export function Overview({ positions, history, debt = 0 }: { positions: Position
   const t = totals(positions);
   const netWorth = t.net - debt;
   const cls = t.classes;
+
+  // Net liquidity must reflect debt. Allocate each loan to a bucket by what
+  // secures it: debt against an illiquid asset (e.g. mortgage) reduces
+  // illiquid; debt against a liquid asset (e.g. crypto loan) or unsecured
+  // debt reduces liquid. So Liquid/Illiquid + Loans out sum to net worth.
+  let illiquidDebt = 0;
+  for (const l of liabilities) {
+    const coll = l.collateral_position_id ? positions.find((p) => p.id === l.collateral_position_id) : null;
+    if (coll && !LIQUID_CLASSES.has(coll.cls)) illiquidDebt += l.balance || 0;
+  }
+  const liquidDebt = debt - illiquidDebt; // liquid-secured + unsecured
+  const netLiquid = t.liquid - liquidDebt;
+  const netIlliquid = t.illiquid - illiquidDebt;
+  const pctOfNet = (v: number) => (netWorth ? Math.round((v / netWorth) * 100) : 0);
   const donutData = (Object.values(cls) as (typeof cls)[AssetClass][])
     .filter((c) => c.value > 0)
     .map((c) => ({ key: c.key, label: c.label, color: c.color, value: c.value }));
@@ -195,8 +212,8 @@ export function Overview({ positions, history, debt = 0 }: { positions: Position
 
       {/* metric band */}
       <div style={{ display: "flex", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
-        <MetricCard label="Liquid" value={fmtUSD(t.liquid)} sub={`${t.net ? ((t.liquid / t.net) * 100).toFixed(0) : 0}% of net worth`} />
-        <MetricCard label="Illiquid" value={fmtUSD(t.illiquid)} sub={`${t.net ? ((t.illiquid / t.net) * 100).toFixed(0) : 0}% of net worth`} />
+        <MetricCard label="Liquid" value={fmtUSD(netLiquid)} sub={debt > 0 ? `${pctOfNet(netLiquid)}% of net worth · net of debt` : `${pctOfNet(netLiquid)}% of net worth`} />
+        <MetricCard label="Illiquid" value={fmtUSD(netIlliquid)} sub={`${pctOfNet(netIlliquid)}% of net worth`} />
         <MetricCard label="Loans out" value={fmtUSD(t.loansOut)} sub={`${cls.loans.count} active note${cls.loans.count === 1 ? "" : "s"}`} />
         <MetricCard label="Cost basis" value={fmtUSD(t.basis)} sub="total invested" />
         {debt > 0 && <MetricCard label="Debt" value={"−" + fmtUSD(debt)} valueColor="var(--neg)" sub="owed" subColor="var(--neg)" />}

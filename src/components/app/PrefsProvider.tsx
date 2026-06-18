@@ -3,6 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import type { Prefs } from "@/lib/db/prefs";
 import { updatePrefs } from "@/lib/db/prefs-actions";
+import { setNumberAbbreviation } from "@/lib/engine";
 import { PrefsCtx } from "@/components/app/prefs-context";
 import { AppHeader } from "@/components/app/AppHeader";
 import { SettingsPanel } from "@/components/app/SettingsPanel";
@@ -12,6 +13,10 @@ const MONO = "#15171A";
 export function PrefsProvider({ initial, email, children }: { initial: Prefs; email?: string; children: React.ReactNode }) {
   const [prefs, setPrefs] = useState<Prefs>(initial);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Apply the number-format preference synchronously during render so SSR and
+  // the client's first paint format figures identically (no hydration drift).
+  setNumberAbbreviation(prefs.numbers !== "full");
 
   const update = (patch: Partial<Prefs>) => {
     setPrefs((p) => ({ ...p, ...patch }));

@@ -7,6 +7,7 @@ export interface Prefs {
   allocChart: "donut" | "bars";
   costBasis: AccountingMethod;
   showNews: boolean;
+  numbers: "abbreviated" | "full";
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -15,6 +16,7 @@ export const DEFAULT_PREFS: Prefs = {
   allocChart: "donut",
   costBasis: "FIFO",
   showNews: true,
+  numbers: "abbreviated",
 };
 
 /** Read the signed-in user's preferences (merged over defaults). */

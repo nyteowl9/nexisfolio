@@ -58,7 +58,7 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <Overview positions={positions} history={history} debt={debt} />
+      <Overview positions={positions} history={history} debt={debt} liabilities={liabilities} />
       <LiabilitiesCard liabilities={liabilities} positions={positions} />
       <div className="nw-page" style={{ maxWidth: 1240, margin: "0 auto", padding: "0 36px 56px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <Link href="/onboarding" style={{ background: "var(--surface)", color: "var(--ink)", border: "var(--hair) solid var(--border)", padding: "8px 16px", borderRadius: 999, fontSize: 13, fontWeight: 500 }}>

@@ -9,9 +9,17 @@ export interface FmtUSDOpts {
   abbr?: boolean;
 }
 
+// Global default for abbreviation, driven by the user's "numbers" preference.
+// Explicit `full`/`abbr` options on a call still win. Set in PrefsProvider so
+// SSR and the client first paint agree.
+let GLOBAL_ABBR = true;
+export function setNumberAbbreviation(on: boolean): void {
+  GLOBAL_ABBR = on;
+}
+
 /** Format a USD figure (uses a minus-sign glyph, tabular-friendly). */
 export function fmtUSD(n: number, opts: FmtUSDOpts = {}): string {
-  const abbr = opts.abbr !== false;
+  const abbr = opts.abbr !== undefined ? opts.abbr : GLOBAL_ABBR;
   const neg = n < 0;
   const a = Math.abs(n);
   let s: string;
