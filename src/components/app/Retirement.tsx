@@ -396,7 +396,7 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
         {method === "coast" ? (
           <Stat label="Coast number" value={fmtUSD(m.coastNumber)} sub={m.coastAchieved ? "reached ✓" : "needed today"} color={m.coastAchieved ? "var(--pos)" : "var(--ink)"} />
         ) : (
-          <Stat label="FIRE number" value={fmtUSD(m.fireNumber)} sub={`${(100 / withdrawalRate).toFixed(0)}× spend @ ${withdrawalRate}%`} />
+          <Stat label="FIRE number" value={fmtUSD(m.fireNumber)} sub={`${(100 / withdrawalRate).toFixed(0)}× ${otherIncome > 0 ? "net spend" : "spend"} @ ${withdrawalRate}%`} />
         )}
         <Stat label={`Projected at ${m.retireAge}`} value={fmtUSD(m.projWithContrib)} sub={`coast: ${fmtUSD(m.projCoast)}`} accent="var(--accent)" />
         {showMC && mc && <Stat label="Success rate" value={mc.successRate + "%"} sub={`${mc.runs} market sims`} color={mc.successRate >= 85 ? "var(--pos)" : mc.successRate >= 65 ? "var(--c-crypto)" : "var(--neg)"} />}
@@ -445,7 +445,7 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
             {otherIncome > 0 && <Slider label="Other income starts at age" value={otherIncomeAge} min={Math.min(retireAge, 62)} max={75} step={1} onChange={setOtherIncomeAge} />}
 
             <GroupLabel>Strategy &amp; assumptions</GroupLabel>
-            <Slider label="Withdrawal rate" value={withdrawalRate} min={3} max={6} step={0.25} onChange={setWR} fmt={(v) => v + "%"} hint="4% is the classic safe rate. Lower = safer." />
+            <Slider label="Target withdrawal rate" value={withdrawalRate} min={3} max={6} step={0.25} onChange={setWR} fmt={(v) => v + "%"} hint={`Sets your number (net spend ÷ rate). A higher rate = a smaller target reached sooner, but a bigger draw each year = riskier. Your real draw is ${m.impliedWR.toFixed(1)}% (in the income plan).`} />
             <div>
               <div style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 500, marginBottom: 8 }}>Withdrawal strategy</div>
               <Seg value={strategy} options={STRATEGIES} onChange={setStrategy} small />

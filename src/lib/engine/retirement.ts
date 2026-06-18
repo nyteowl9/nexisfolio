@@ -168,7 +168,10 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
   const infl = (o.inflation ?? 3) / 100;
   const real = (n: number) => (1 + n) / (1 + infl) - 1;
   const realBlended = real(blended);
-  const fireNumber = o.annualSpend * (100 / o.withdrawalRate);
+  // Other income (Social Security, pension, …) reduces what the portfolio must
+  // fund, so it shrinks your required number — not just the drawdown.
+  const netSpend = Math.max(0, o.annualSpend - o.otherIncome);
+  const fireNumber = netSpend * (100 / o.withdrawalRate);
   const target = o.target != null ? o.target : fireNumber;
   const yrsToRetire = Math.max(0, o.retireAge - o.currentAge);
   const coastStop = o.method === "coast" && o.coastAge != null ? o.coastAge : o.retireAge;
@@ -223,6 +226,10 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
   const projCoast = coastWalk.projAtRetire;
   const depletionAge = main.depletionAge;
   const neverDepletes = depletionAge == null;
+  // The REAL withdrawal rate: net spend ÷ the portfolio you'll actually have.
+  // This is the honest safety gauge — it doesn't improve by sliding the target
+  // withdrawal-rate lever, only by saving more / spending less / more income.
+  const impliedWR = projWithContrib > 0 ? (netSpend / projWithContrib) * 100 : 0;
 
   function ageHitting(startBal: number, monthlyContrib: number): number | null {
     if (startBal >= target) return o.currentAge;
@@ -319,6 +326,8 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
     coastNumber,
     coastAchieved,
     earliestCoastAge,
+    netSpend,
+    impliedWR,
     projWithContrib,
     projCoast,
     fireAge,
