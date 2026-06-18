@@ -49,19 +49,21 @@
 }
 
 [data-theme="dark"] {
-  --bg:        #0D0E10;
-  --bg-sunk:   #090A0B;
-  --surface:   #16181B;
-  --surface-2: #1B1D21;
-  --border:    #26282C;
-  --border-strong: #34373C;
-  --ink:       #F3F4F5;
-  --ink-2:     #A2A8AF;
-  --ink-3:     #6B7178;
-  --accent:    #F3F4F5;
-  --accent-ink:#15171A;
-  --shadow:    0 1px 2px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
-  --donut-track:#26282C;
+  /* Soft cool-slate dark (not pure black), with clear elevation:
+     bg < surface < surface-2. Tuned after Linear / Vercel / Stripe dark. */
+  --bg:        #15171C;
+  --bg-sunk:   #101216;
+  --surface:   #1C1F26;
+  --surface-2: #242831;
+  --border:    #2C313A;
+  --border-strong: #3B414C;
+  --ink:       #ECEEF1;
+  --ink-2:     #A6ADB7;
+  --ink-3:     #727A85;
+  --accent:    #ECEEF1;
+  --accent-ink:#15171C;
+  --shadow:    0 1px 2px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.35);
+  --donut-track:#2C313A;
 
   --t-crypto:  #3A2E13;
   --t-stocks:  #182542;

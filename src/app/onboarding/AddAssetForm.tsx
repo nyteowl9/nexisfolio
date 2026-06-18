@@ -25,9 +25,10 @@ const CLASS_META: Record<Cls, { label: string; color: string }> = {
   loans: { label: "Loans", color: "#E5689A" },
 };
 
+// Theme-token classes so the form matches light & dark (and the in-app modal).
 const field =
-  "w-full rounded-[10px] border border-[#E7E8EA] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#15171A]";
-const flabel = "mb-1 block text-xs font-semibold text-[#5C6168]";
+  "w-full rounded-[10px] border border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--ink)] px-3 py-2.5 text-sm outline-none focus:border-[var(--ink)]";
+const flabel = "mb-1 block text-xs font-semibold text-[var(--ink-2)]";
 
 function SymbolSearch({
   cls,
@@ -75,11 +76,11 @@ function SymbolSearch({
         placeholder="Search — e.g. bitcoin, NVDA, gold… (typos OK)"
         className={field}
       />
-      <p className="mt-1 text-[11px] text-[#8A9099]">
+      <p className="mt-1 text-[11px] text-[var(--ink-3)]">
         {loading ? "Searching…" : "Pick from the list — price fills in automatically."}
       </p>
       {open && results.length > 0 && (
-        <div className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-[10px] border border-[#E7E8EA] bg-white shadow-lg">
+        <div className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)] shadow-lg">
           {results.map((r) => (
             <button
               type="button"
@@ -89,7 +90,7 @@ function SymbolSearch({
                 setQ(`${r.ticker} · ${r.name}`);
                 setOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[#F5F5F6]"
+              className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[var(--bg-sunk)]"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {r.logo ? (
@@ -104,7 +105,7 @@ function SymbolSearch({
               )}
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">
-                  {r.ticker} <span className="font-normal text-[#8A9099]">{r.name}</span>
+                  {r.ticker} <span className="font-normal text-[var(--ink-3)]">{r.name}</span>
                 </span>
               </span>
             </button>
@@ -174,9 +175,9 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
               onClick={() => switchClass(c)}
               className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition"
               style={{
-                borderColor: active ? CLASS_META[c].color : "#E7E8EA",
-                background: active ? `${CLASS_META[c].color}14` : "#fff",
-                color: active ? CLASS_META[c].color : "#5C6168",
+                borderColor: active ? CLASS_META[c].color : "var(--border)",
+                background: active ? `${CLASS_META[c].color}22` : "var(--surface)",
+                color: active ? CLASS_META[c].color : "var(--ink-2)",
               }}
             >
               <span className="h-2 w-2 rounded-full" style={{ background: CLASS_META[c].color }} />
@@ -196,12 +197,12 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
           <input type="hidden" name="currentPrice" value={price ?? ""} />
 
           {picked && (
-            <div className="rounded-[10px] border border-[#E7E8EA] bg-[#FAFAFB] p-3 text-sm">
+            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="font-semibold">
                   {picked.ticker} · {picked.name}
                 </span>
-                <span className="tabular-nums text-[#5C6168]">
+                <span className="tabular-nums text-[var(--ink-2)]">
                   {priceLoading ? "fetching price…" : price != null ? `${fmtUSD(price, { full: true, cents: price < 1000 })} live` : "price unavailable"}
                 </span>
               </div>
@@ -240,8 +241,8 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
 
           {/* live preview */}
           {qtyN > 0 && (
-            <div className="rounded-[10px] border border-[#E7E8EA] bg-white p-4">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#8A9099]">
+            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-3)]">
                 Live preview
               </p>
               <Row k="Cost basis" v={fmtUSD(basis, { full: true })} />
@@ -254,8 +255,8 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
                 v={`${pl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(pl), { full: true })}`}
                 color={pl >= 0 ? "#0E9D6E" : "#E0443E"}
               />
-              <div className="mt-2 flex items-baseline justify-between border-t border-[#E7E8EA] pt-2">
-                <span className="text-sm font-semibold text-[#5C6168]">Current value</span>
+              <div className="mt-2 flex items-baseline justify-between border-t border-[var(--border)] pt-2">
+                <span className="text-sm font-semibold text-[var(--ink-2)]">Current value</span>
                 <span className="text-lg font-bold tabular-nums">{fmtUSD(value, { full: true })}</span>
               </div>
             </div>
@@ -277,8 +278,8 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
           )}
 
           {isCardCollection ? (
-            <div className="rounded-[10px] border border-[#E7E8EA] bg-[#FAFAFB] p-4 text-sm text-[#5C6168]">
-              <p className="font-semibold text-[#15171A]">Trading-card collection</p>
+            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--ink-2)]">
+              <p className="font-semibold text-[var(--ink)]">Trading-card collection</p>
               <p className="mt-1 text-[13px]">
                 Card collections are valued automatically from live card prices — you don&rsquo;t enter a
                 total. Continue to the catalog to add individual cards or sealed product, each priced for you.
@@ -314,7 +315,7 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
         </>
       )}
 
-      <button className="w-full rounded-full bg-[#15171A] py-2.5 text-sm font-medium text-white transition hover:opacity-90">
+      <button className="w-full rounded-full bg-[var(--accent)] py-2.5 text-sm font-medium text-[var(--accent-ink)] transition hover:opacity-90">
         {isCardCollection ? "Continue to card catalog →" : "Add asset"}
       </button>
     </form>
@@ -324,7 +325,7 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
 function Row({ k, v, color }: { k: string; v: string; color?: string }) {
   return (
     <div className="mb-1.5 flex items-baseline justify-between">
-      <span className="text-[13px] text-[#8A9099]">{k}</span>
+      <span className="text-[13px] text-[var(--ink-3)]">{k}</span>
       <span className="text-[13px] font-semibold tabular-nums" style={color ? { color } : undefined}>
         {v}
       </span>
