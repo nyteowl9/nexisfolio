@@ -15,6 +15,10 @@ export interface RetirementPrefs {
   coastAge: number;
   includeHome: boolean;
   overrides: Record<string, number>;
+  endAge: number;
+  otherIncome: number;
+  otherIncomeAge: number;
+  withdrawalStrategy: "constant" | "guardrails" | "percent";
 }
 
 export interface Prefs {
@@ -41,6 +45,10 @@ export const DEFAULT_RETIREMENT: RetirementPrefs = {
   coastAge: 55,
   includeHome: false,
   overrides: {},
+  endAge: 95,
+  otherIncome: 0,
+  otherIncomeAge: 67,
+  withdrawalStrategy: "constant",
 };
 
 export const DEFAULT_PREFS: Prefs = {

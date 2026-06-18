@@ -61,6 +61,8 @@ export function yearsToTarget(
   return null;
 }
 
+export type WithdrawalStrategy = "constant" | "guardrails" | "percent";
+
 export interface RetirementOpts {
   currentAge?: number;
   retireAge?: number;
@@ -78,6 +80,33 @@ export interface RetirementOpts {
   includeHome?: boolean;
   /** annual inflation % — returns are converted to real (today's-dollar) terms */
   inflation?: number;
+  /** how retirement spending flexes with the portfolio */
+  withdrawalStrategy?: WithdrawalStrategy;
+}
+
+/**
+ * Gross (pre-other-income) spend for a retirement year, by strategy.
+ * - constant: the classic 4%-rule fixed real spend.
+ * - percent: spend a fixed % of the *current* balance (never depletes; income flexes).
+ * - guardrails: Guyton-Klinger — trim 10% if the withdrawal rate drifts 20% above
+ *   the initial rate, raise 10% if it drifts 20% below. `cur` carries year to year.
+ */
+function spendForYear(
+  strat: WithdrawalStrategy,
+  bal: number,
+  cur: number,
+  initWR: number,
+  baseSpend: number
+): { spend: number; cur: number } {
+  if (strat === "percent") return { spend: Math.max(0, bal) * initWR, cur };
+  if (strat === "guardrails") {
+    const wr = bal > 0 ? cur / bal : Infinity;
+    let c = cur;
+    if (wr > initWR * 1.2) c = cur * 0.9;
+    else if (wr < initWR * 0.8) c = cur * 1.1;
+    return { spend: c, cur: c };
+  }
+  return { spend: baseSpend, cur };
 }
 
 export interface RetirementYear {
@@ -115,8 +144,10 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
     otherIncomeAge: 67,
     includeHome: false,
     inflation: 3,
+    withdrawalStrategy: "constant" as WithdrawalStrategy,
     ...opts,
   };
+  const initWR = o.withdrawalRate / 100;
 
   const invest = investableByClass(positions, o.includeHome);
   const investable = Object.values(invest).reduce((s, v) => s + (v ?? 0), 0);
@@ -143,18 +174,23 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
     let bal = startBal;
     let projAtRetire: number | null = null;
     let depletionAge: number | null = null;
+    let curSpend = o.annualSpend; // running spend for adaptive strategies
     const yearly: RetirementYear[] = [];
     for (let age = o.currentAge; age <= o.endAge; age++) {
       yearly.push({ age, bal: Math.max(0, bal), phase: age < o.retireAge ? "accum" : "draw", coast: null });
       if (age === o.retireAge) projAtRetire = bal;
-      for (let m = 0; m < 12; m++) {
-        if (age < o.retireAge) {
+      if (age < o.retireAge) {
+        for (let m = 0; m < 12; m++) {
           bal = bal * (1 + rmAcc);
           if (age < coastStop) bal += monthlyContrib;
-        } else {
+        }
+      } else {
+        const g = spendForYear(o.withdrawalStrategy, bal, curSpend, initWR, o.annualSpend);
+        curSpend = g.cur;
+        let need = g.spend;
+        if (o.otherIncome > 0 && age >= o.otherIncomeAge) need = Math.max(0, need - o.otherIncome);
+        for (let m = 0; m < 12; m++) {
           bal = bal * (1 + rmDraw);
-          let need = o.annualSpend;
-          if (o.otherIncome > 0 && age >= o.otherIncomeAge) need = Math.max(0, need - o.otherIncome);
           bal -= need / 12;
         }
       }
@@ -321,8 +357,11 @@ export function retirementMC(
     otherIncomeAge: 67,
     includeHome: false,
     inflation: 3,
+    withdrawalRate: 4,
+    withdrawalStrategy: "constant" as WithdrawalStrategy,
     ...opts,
   };
+  const initWR = o.withdrawalRate / 100;
   const invest = investableByClass(positions, o.includeHome);
   const investable = Object.values(invest).reduce((s, v) => s + (v ?? 0), 0);
   const cagr: ClassMap = { ...(SCENARIOS[o.scenario] || SCENARIOS.Base), ...(o.cagrOverride || {}) };
@@ -351,6 +390,8 @@ export function retirementMC(
   for (let run = 0; run < runs; run++) {
     let bal = investable;
     let survived = true;
+    let curSpend = o.annualSpend;
+    let incomeFloorBreached = false;
     for (let i = 0; i < years; i++) {
       const age = o.currentAge + i;
       const r = mean + o.sd * randn();
@@ -358,7 +399,10 @@ export function retirementMC(
       if (age < o.retireAge) {
         if (age < coastStop) bal += o.monthly * 12;
       } else {
-        let need = o.annualSpend;
+        const g = spendForYear(o.withdrawalStrategy, bal, curSpend, initWR, o.annualSpend);
+        curSpend = g.cur;
+        if (g.spend < o.annualSpend * 0.5) incomeFloorBreached = true; // income collapsed
+        let need = g.spend;
         if (o.otherIncome > 0 && age >= o.otherIncomeAge) need = Math.max(0, need - o.otherIncome);
         bal -= need;
       }
@@ -368,7 +412,9 @@ export function retirementMC(
       }
       cols[i].push(bal);
     }
-    if (survived) successes++;
+    // success = money never ran out; for the flexible % strategy, also require
+    // income never collapsed below half the target.
+    if (survived && !(o.withdrawalStrategy === "percent" && incomeFloorBreached)) successes++;
   }
   const pct = (arr: number[], p: number) => {
     const s = [...arr].sort((a, b) => a - b);

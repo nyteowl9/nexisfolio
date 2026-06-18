@@ -22,6 +22,24 @@ const METHODS = [
   { value: "fire", label: "FIRE" },
 ] as const;
 
+const METHOD_INFO: Record<string, { title: string; body: string }> = {
+  traditional: { title: "Traditional", body: "Save steadily, retire around 65, then draw ~4%/yr to your plan-to age. Your number is your annual spend ÷ withdrawal rate (the 4% rule = 25× spend)." },
+  coast: { title: "Coast FIRE", body: "Front-load saving, then coast. Once your balance is big enough to grow into your number on its own, you can stop contributing and let it compound to retirement — the calculated coast age below." },
+  fire: { title: "FIRE", body: "Retire early. The nest egg is larger and we default to a safer 3.5% withdrawal because the money must last a much longer horizon (often 40–50+ years)." },
+};
+
+const STRATEGIES = [
+  { value: "constant", label: "4% rule" },
+  { value: "guardrails", label: "Guardrails" },
+  { value: "percent", label: "% of balance" },
+] as const;
+
+const STRATEGY_HINT: Record<string, string> = {
+  constant: "Classic: a fixed real income every year. Simple, but can deplete in bad markets.",
+  guardrails: "Guyton-Klinger: trim spending ~10% after bad years, raise it after good ones. Higher success, variable income.",
+  percent: "Spend a set % of the current balance each year. Never runs out, but income rises and falls with markets.",
+};
+
 function Seg<T extends string>({ value, options, onChange, small }: { value: T; options: readonly ({ value: T; label: string } | T)[]; onChange: (v: T) => void; small?: boolean }) {
   return (
     <div style={{ display: "inline-flex", gap: 3, background: "var(--bg-sunk)", padding: 3, borderRadius: 8 }}>
@@ -256,23 +274,33 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
   const [coastAge, setCoastAge] = useState(r0.coastAge);
   const [includeHome, setIncludeHome] = useState(r0.includeHome);
   const [overrides, setOverrides] = useState<Record<string, number>>(r0.overrides ?? {});
+  const [endAge, setEndAge] = useState(r0.endAge ?? 95);
+  const [otherIncome, setOtherIncome] = useState(r0.otherIncome ?? 0);
+  const [otherIncomeAge, setOtherIncomeAge] = useState(r0.otherIncomeAge ?? 67);
+  const [strategy, setStrategy] = useState<"constant" | "guardrails" | "percent">(r0.withdrawalStrategy ?? "constant");
   const [showMC, setShowMC] = useState(true);
 
   // Persist the levers (debounced) so they survive navigation.
   const ovStr = JSON.stringify(overrides);
   useEffect(() => {
     const id = setTimeout(() => {
-      update({ retirement: { method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome, overrides } });
+      update({ retirement: { method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome, overrides, endAge, otherIncome, otherIncomeAge, withdrawalStrategy: strategy } });
     }, 600);
     return () => clearTimeout(id);
-  }, [method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome, ovStr]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [method, scenario, currentAge, retireAge, annualSpend, monthly, target, customGoal, withdrawalRate, inflation, coastAge, includeHome, ovStr, endAge, otherIncome, otherIncomeAge, strategy]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const applyMethod = (mth: "traditional" | "coast" | "fire") => { setMethod(mth); setRetireAge(mth === "fire" ? 50 : 65); };
+  // Each method nudges sensible defaults (FIRE = retire early + safer 3.5% SWR
+  // for the longer horizon); the user can still adjust every lever after.
+  const applyMethod = (mth: "traditional" | "coast" | "fire") => {
+    setMethod(mth);
+    if (mth === "fire") { setRetireAge(50); setWR(3.5); }
+    else { setRetireAge(65); setWR(4); }
+  };
 
-  const opts: RetirementOpts = { currentAge, retireAge: Math.max(retireAge, currentAge + 1), annualSpend, monthly, scenario, target: customGoal ? target : null, method, coastAge, withdrawalRate, inflation, includeHome, cagrOverride: overrides };
+  const opts: RetirementOpts = { currentAge, retireAge: Math.max(retireAge, currentAge + 1), annualSpend, monthly, scenario, target: customGoal ? target : null, method, coastAge, withdrawalRate, inflation, includeHome, cagrOverride: overrides, endAge, otherIncome, otherIncomeAge, withdrawalStrategy: strategy };
   const ovKey = JSON.stringify(overrides);
-  const m = useMemo(() => retirement(positions, opts), [positions, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const mc = useMemo(() => (showMC ? retirementMC(positions, { ...opts, sd: 0.13 }, 500) : null), [positions, showMC, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = useMemo(() => retirement(positions, opts), [positions, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey, endAge, otherIncome, otherIncomeAge, strategy]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mc = useMemo(() => (showMC ? retirementMC(positions, { ...opts, sd: 0.13 }, 500) : null), [positions, showMC, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey, endAge, otherIncome, otherIncomeAge, strategy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hitsGoal = m.fireAge != null;
   const already = hitsGoal && (m.fireAge as number) <= currentAge + 0.05;
@@ -326,6 +354,13 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
         </div>
       </div>
 
+      <div style={{ ...card, padding: "13px 18px", marginBottom: 18, display: "flex", gap: 11, alignItems: "flex-start" }}>
+        <span style={{ width: 7, height: 7, borderRadius: 99, background: "var(--accent)", flex: "none", marginTop: 6 }} />
+        <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>
+          <b style={{ color: "var(--ink)" }}>{METHOD_INFO[method].title}.</b> {METHOD_INFO[method].body}
+        </div>
+      </div>
+
       <div style={{ display: "flex", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
         <Stat label="Investable now" value={fmtUSD(m.investable)} sub={`${m.sectors.length} sectors · ${(m.blended * 100).toFixed(1)}% blended`} />
         {method === "coast" ? (
@@ -373,6 +408,14 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
             <Slider label="Monthly contribution" value={monthly} min={0} max={40000} step={500} onChange={setMonthly} fmt={(v) => fmtUSD(v, { full: true })} />
             <Slider label="Annual spend in retirement" value={annualSpend} min={40000} max={400000} step={10000} onChange={setSpend} fmt={(v) => fmtUSD(v)} />
             <Slider label="Withdrawal rate" value={withdrawalRate} min={3} max={6} step={0.25} onChange={setWR} fmt={(v) => v + "%"} hint="4% is the classic safe rate. Lower = safer." />
+            <div>
+              <div style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 500, marginBottom: 8 }}>Withdrawal strategy</div>
+              <Seg value={strategy} options={STRATEGIES} onChange={setStrategy} small />
+              <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.4 }}>{STRATEGY_HINT[strategy]}</div>
+            </div>
+            <Slider label="Other income in retirement" value={otherIncome} min={0} max={120000} step={2000} onChange={setOtherIncome} fmt={(v) => fmtUSD(v) + "/yr"} hint="Social Security, pension, annuity, part-time work — reduces what your portfolio must cover." />
+            {otherIncome > 0 && <Slider label="Other income starts at age" value={otherIncomeAge} min={Math.min(retireAge, 62)} max={75} step={1} onChange={setOtherIncomeAge} />}
+            <Slider label="Plan to age (longevity)" value={endAge} min={80} max={105} step={1} onChange={setEndAge} hint="How long the money must last. Planning to 95–100 is prudent." />
             <Slider label="Inflation" value={inflation} min={0} max={6} step={0.5} onChange={setInflation} fmt={(v) => v + "%"} hint="Everything is shown in today's dollars (returns minus inflation)." />
             <div>
               <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
