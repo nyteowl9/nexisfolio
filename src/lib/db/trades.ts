@@ -102,11 +102,12 @@ export async function logTrade(formData: FormData) {
 type PosRow = { id: string; cls: AssetClass; ticker: string | null; name: string; qty: number | null; manual_value: number | null; account: string | null };
 
 /** Draw `amount` (USD) out of a position: sell units (crypto/stock/metal) or
- *  reduce a cash/manual balance. Returns the dollar amount actually moved. */
-async function drawDown(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string): Promise<number> {
+ *  reduce a cash/manual balance. `override` forces the unit price (for a
+ *  historical conversion); otherwise today's live price is used. Returns the
+ *  dollar amount actually moved. */
+async function drawDown(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string, override = 0): Promise<number> {
   if (isUnitPriced(pos.cls)) {
-    const q = await fetchQuote(pos.cls, pos.ticker ?? "");
-    const price = q?.price ?? 0;
+    const price = override > 0 ? override : (await fetchQuote(pos.cls, pos.ticker ?? ""))?.price ?? 0;
     if (!price) return 0;
     const want = amount / price;
     const have = pos.qty ?? 0;
@@ -139,17 +140,21 @@ async function drawDown(supabase: Awaited<ReturnType<typeof createClient>>, user
   return moved;
 }
 
-/** Put `amount` (USD) into an existing position: buy units or top up cash. */
-async function addInto(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string) {
+/** Put `amount` (USD) into an existing position: buy units or top up cash.
+ *  `override` forces the unit (cost-basis) price; the live price cache is only
+ *  refreshed when no override is given. */
+async function addInto(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, pos: PosRow, amount: number, date: string, override = 0) {
   if (isUnitPriced(pos.cls)) {
-    const q = await fetchQuote(pos.cls, pos.ticker ?? "");
-    const price = q?.price ?? 0;
+    const q = override > 0 ? null : await fetchQuote(pos.cls, pos.ticker ?? "");
+    const price = override > 0 ? override : q?.price ?? 0;
     if (!price) return;
     const qty = amount / price;
     const { data: lot } = await supabase.from("lots").insert({ user_id: userId, position_id: pos.id, qty, price, acquired_date: date, account: pos.account }).select("id").single();
     await supabase.from("positions").update({ qty: (pos.qty ?? 0) + qty }).eq("id", pos.id);
-    const admin = createAdminClient();
-    await admin.from("price_cache").upsert({ asset_key: priceKey(pos.cls, pos.ticker ?? ""), price, prev_close: q?.prev ?? price });
+    if (q) {
+      const admin = createAdminClient();
+      await admin.from("price_cache").upsert({ asset_key: priceKey(pos.cls, pos.ticker ?? ""), price, prev_close: q.prev ?? price });
+    }
     await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, lot_id: lot?.id ?? null, tx_date: date, type: "buy", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty, price, amount, account: pos.account, source: "manual", note: "Converted in" });
     return;
   }
@@ -173,12 +178,14 @@ export async function convert(formData: FormData) {
   const fromId = str(formData.get("fromId"));
   const amount = num(formData.get("amount"));
   const date = str(formData.get("date")) || new Date().toISOString().slice(0, 10);
+  const fromPrice = num(formData.get("fromPrice")); // optional override
+  const toPrice = num(formData.get("toPrice")); // optional override
   if (!fromId || amount <= 0) redirect(`${back}?error=Pick+a+source+and+amount`);
 
   const { data: from } = await supabase.from("positions").select("id,cls,ticker,name,qty,manual_value,account").eq("id", fromId).eq("user_id", user.id).single();
   if (!from) redirect(`${back}?error=Source+not+found`);
 
-  const moved = await drawDown(supabase, user.id, from as PosRow, amount, date);
+  const moved = await drawDown(supabase, user.id, from as PosRow, amount, date, fromPrice);
   if (moved <= 0) redirect(`${back}?error=Nothing+available+to+convert`);
 
   const toMode = str(formData.get("toMode")) || "existing";
@@ -187,18 +194,17 @@ export async function convert(formData: FormData) {
     const ticker = str(formData.get("toTicker")).toUpperCase();
     const providerId = str(formData.get("toProviderId")) || undefined;
     if (!cls || !ticker) redirect(`${back}?error=Pick+a+destination+asset`);
-    const q = await fetchQuote(cls, ticker, providerId);
-    const price = q?.price ?? 0;
-    if (!price) redirect(`${back}?error=No+price+for+destination`);
-    // insertPosition fetches the live price itself and records the lot, price
-    // cache, buy ledger entry, and merges into an existing same-ticker holding.
+    const live = toPrice > 0 ? toPrice : (await fetchQuote(cls, ticker, providerId))?.price ?? 0;
+    if (!live) redirect(`${back}?error=No+price+for+destination`);
+    // insertPosition refreshes the live price cache itself; costPerUnit is the
+    // conversion price (override or live), and it merges same-ticker holdings.
     await insertPosition(supabase, user.id, {
       cls,
       name: str(formData.get("toName")) || ticker,
       ticker,
       providerId,
-      qty: moved / price,
-      costPerUnit: price,
+      qty: moved / live,
+      costPerUnit: live,
       acquiredDate: date,
     });
   } else {
@@ -206,7 +212,7 @@ export async function convert(formData: FormData) {
     if (!toId || toId === fromId) redirect(`${back}?error=Pick+a+different+destination`);
     const { data: to } = await supabase.from("positions").select("id,cls,ticker,name,qty,manual_value,account").eq("id", toId).eq("user_id", user.id).single();
     if (!to) redirect(`${back}?error=Destination+not+found`);
-    await addInto(supabase, user.id, to as PosRow, moved, date);
+    await addInto(supabase, user.id, to as PosRow, moved, date, toPrice);
   }
 
   revalidatePath("/dashboard");

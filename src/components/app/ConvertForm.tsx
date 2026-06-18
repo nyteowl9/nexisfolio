@@ -64,6 +64,9 @@ export function ConvertForm() {
 
   const from = positions.find((p) => p.id === fromId);
   const toOptions = positions.filter((p) => p.id !== fromId);
+  const toSel = toOptions.find((p) => p.id === toId);
+  const fromUnit = !!from && isUnitPriced(from.cls);
+  const toUnit = toMode === "new" ? true : !!toSel && isUnitPriced(toSel.cls);
   const amt = parseFloat(amount) || 0;
   const ready = !!fromId && amt > 0 && (toMode === "existing" ? !!toId && toId !== fromId : !!picked);
 
@@ -128,6 +131,16 @@ export function ConvertForm() {
           {label("Date")}
           <input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} style={inputStyle} />
         </label>
+
+        {(fromUnit || toUnit) && (
+          <div>
+            <div style={{ display: "grid", gridTemplateColumns: fromUnit && toUnit ? "1fr 1fr" : "1fr", gap: 12 }}>
+              {fromUnit && <label>{label("Sell price (optional)")}<input name="fromPrice" type="number" step="any" placeholder="live" style={inputStyle} /></label>}
+              {toUnit && <label>{label("Buy price (optional)")}<input name="toPrice" type="number" step="any" placeholder="live" style={inputStyle} /></label>}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.4 }}>Leave blank to use today&rsquo;s live price. For a past-dated conversion, enter the price you actually got and set the date above.</div>
+          </div>
+        )}
 
         {from && amt > 0 && (
           <div style={{ fontSize: 12.5, color: "var(--ink-3)", background: "var(--surface-2)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>

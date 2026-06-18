@@ -68,10 +68,22 @@ function Slider({ label, value, min, max, step, onChange, fmt, hint }: { label: 
   );
 }
 
-function Stat({ label, value, sub, color, accent }: { label: string; value: string; sub?: string; color?: string; accent?: string }) {
+function InfoDot({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
   return (
-    <div style={{ flex: 1, minWidth: 150, ...card, padding: "15px 18px", borderTop: accent ? `2px solid ${accent}` : undefined }}>
-      <div style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 500, marginBottom: 9 }}>{label}</div>
+    <span style={{ position: "relative", display: "inline-flex", marginLeft: 5 }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+      <span style={{ width: 14, height: 14, borderRadius: 99, border: "1px solid var(--border-strong)", color: "var(--ink-3)", fontSize: 9.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "help", lineHeight: 1, fontStyle: "italic", fontFamily: "Georgia, serif" }}>i</span>
+      {show && (
+        <span style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", width: 224, background: "var(--ink)", color: "var(--surface)", fontSize: 11.5, fontWeight: 400, lineHeight: 1.5, padding: "9px 11px", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.25)", zIndex: 30, textTransform: "none", letterSpacing: 0 }}>{text}</span>
+      )}
+    </span>
+  );
+}
+
+function Stat({ label, value, sub, color, accent, info }: { label: string; value: string; sub?: string; color?: string; accent?: string; info?: string }) {
+  return (
+    <div style={{ flex: 1, minWidth: 150, ...card, padding: "15px 18px", borderTop: accent ? `2px solid ${accent}` : undefined, overflow: "visible" }}>
+      <div style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 500, marginBottom: 9, display: "flex", alignItems: "center" }}>{label}{info && <InfoDot text={info} />}</div>
       <div className="num" style={{ fontSize: 20, fontWeight: 650, letterSpacing: "-.02em", color: color || "var(--ink)" }}>{value}</div>
       {sub && <div className="num" style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 4 }}>{sub}</div>}
     </div>
@@ -404,15 +416,15 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
       </div>
 
       <div style={{ display: "flex", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
-        <Stat label="Investable now" value={fmtUSD(m.investable)} sub={debt > 0 ? `net of ${fmtUSD(debt)} debt · ${(m.blended * 100).toFixed(1)}% blended` : `${m.sectors.length} sectors · ${(m.blended * 100).toFixed(1)}% blended`} />
+        <Stat label="Investable now" value={fmtUSD(m.investable)} sub={debt > 0 ? `net of ${fmtUSD(debt)} debt · ${(m.blended * 100).toFixed(1)}% blended` : `${m.sectors.length} sectors · ${(m.blended * 100).toFixed(1)}% blended`} info="Everything you hold today that's working toward retirement (crypto, stocks, cash…), after subtracting investable-asset debt. 'Blended' is your mix's weighted-average expected return." />
         {method === "coast" ? (
-          <Stat label="Coast number" value={fmtUSD(m.coastNumber)} sub={m.coastAchieved ? "reached ✓" : "needed today"} color={m.coastAchieved ? "var(--pos)" : "var(--ink)"} />
+          <Stat label="Coast number" value={fmtUSD(m.coastNumber)} sub={m.coastAchieved ? "reached ✓" : "needed today"} color={m.coastAchieved ? "var(--pos)" : "var(--ink)"} info="How much you'd need invested today so it can compound to your retirement number by your retire age with zero further saving." />
         ) : (
-          <Stat label="FIRE number" value={fmtUSD(m.fireNumber)} sub={`${(100 / withdrawalRate).toFixed(0)}× ${otherIncome > 0 ? "net spend" : "spend"} @ ${withdrawalRate}%`} />
+          <Stat label="FIRE number" value={fmtUSD(m.fireNumber)} sub={`${(100 / withdrawalRate).toFixed(0)}× ${otherIncome > 0 ? "net spend" : "spend"} @ ${withdrawalRate}%`} info="The amount you need invested to retire: your annual spend minus other income, divided by your withdrawal rate (the 4% rule = 25× spend)." />
         )}
-        <Stat label={`Projected at ${m.retireAge}`} value={fmtUSD(m.projWithContrib)} sub={`coast: ${fmtUSD(m.projCoast)}`} accent="var(--accent)" />
-        {showMC && mc && <Stat label="Success rate" value={mc.successRate + "%"} sub={`${mc.runs} market sims`} color={mc.successRate >= 85 ? "var(--pos)" : mc.successRate >= 65 ? "var(--c-crypto)" : "var(--neg)"} />}
-        <Stat label="Money lasts" value={m.neverDepletes ? "Sustains" : `age ${m.depletionAge}`} color={m.neverDepletes ? "var(--pos)" : "var(--neg)"} sub={strategy === "percent" ? `draw ${withdrawalRate}% of balance/yr` : strategy === "guardrails" ? `flexes around ${fmtUSD(annualSpend)}/yr` : `spend ${fmtUSD(annualSpend)}/yr`} />
+        <Stat label={`Projected at ${m.retireAge}`} value={fmtUSD(m.projWithContrib)} sub={`coast: ${fmtUSD(m.projCoast)}`} accent="var(--accent)" info="What your portfolio is expected to grow into by your retire age — today's balance plus contributions, compounded at your blended return. 'Coast' is the total if you stopped contributing now." />
+        {showMC && mc && <Stat label="Success rate" value={mc.successRate + "%"} sub={`${mc.runs} market sims`} color={mc.successRate >= 85 ? "var(--pos)" : mc.successRate >= 65 ? "var(--c-crypto)" : "var(--neg)"} info="Across 500 simulated market histories (good and bad return sequences), the share where your money lasts the whole retirement. ~85%+ is generally considered solid." />}
+        <Stat label="Money lasts" value={m.neverDepletes ? "Sustains" : `age ${m.depletionAge}`} color={m.neverDepletes ? "var(--pos)" : "var(--neg)"} sub={strategy === "percent" ? `draw ${withdrawalRate}% of balance/yr` : strategy === "guardrails" ? `flexes around ${fmtUSD(annualSpend)}/yr` : `spend ${fmtUSD(annualSpend)}/yr`} info="In the median projection, whether your money sustains your spending through your plan-to age — or the age it would run out." />
       </div>
 
       <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16, alignItems: "start", marginBottom: 18 }}>
