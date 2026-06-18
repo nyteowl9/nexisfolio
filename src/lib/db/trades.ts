@@ -128,14 +128,14 @@ async function drawDown(supabase: Awaited<ReturnType<typeof createClient>>, user
     }
     await supabase.from("positions").update({ qty: Math.max(0, have - qtySold) }).eq("id", pos.id);
     await supabase.from("disposals").insert({ user_id: userId, position_id: pos.id, ticker: pos.ticker, cls: pos.cls, qty: qtySold, proceeds, sold_date: date, lot_snapshot: consumed });
-    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "sell", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty: qtySold, price, amount: proceeds, account: pos.account, source, note: "Converted out" });
+    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "sell", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty: qtySold, price, amount: proceeds, account: pos.account, source, note: "Traded out" });
     return proceeds;
   }
   // cash / manual
   const have = pos.manual_value ?? 0;
   const moved = Math.min(amount, have);
   await supabase.from("positions").update({ manual_value: Math.max(0, have - moved) }).eq("id", pos.id);
-  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "withdraw", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount: moved, account: pos.account, source, note: "Converted out" });
+  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "withdrawal", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount: moved, account: pos.account, source, note: "Traded out" });
   return moved;
 }
 
@@ -154,12 +154,12 @@ async function addInto(supabase: Awaited<ReturnType<typeof createClient>>, userI
       const admin = createAdminClient();
       await admin.from("price_cache").upsert({ asset_key: priceKey(pos.cls, pos.ticker ?? ""), price, prev_close: q.prev ?? price });
     }
-    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, lot_id: lot?.id ?? null, tx_date: date, type: "buy", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty, price, amount, account: pos.account, source, note: "Converted in" });
+    await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, lot_id: lot?.id ?? null, tx_date: date, type: "buy", cls: pos.cls, ticker: pos.ticker, name: pos.name, qty, price, amount, account: pos.account, source, note: "Traded in" });
     return;
   }
   const have = pos.manual_value ?? 0;
   await supabase.from("positions").update({ manual_value: have + amount }).eq("id", pos.id);
-  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "deposit", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount, account: pos.account, source, note: "Converted in" });
+  await supabase.from("transactions").insert({ user_id: userId, position_id: pos.id, tx_date: date, type: "deposit", cls: pos.cls, ticker: pos.ticker, name: pos.name, amount, account: pos.account, source, note: "Traded in" });
 }
 
 /**

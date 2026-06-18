@@ -31,7 +31,7 @@ export async function reverseOne(supabase: SupabaseClient, userId: string, tx: T
     const { data: disp } = await supabase.from("disposals").select("id").eq("position_id", pid).eq("user_id", userId).order("sold_date", { ascending: false }).limit(1);
     if (disp?.[0]) await supabase.from("disposals").delete().eq("id", disp[0].id).eq("user_id", userId);
   } else if (!unit && pos) {
-    if (tx.type === "withdraw") await supabase.from("positions").update({ manual_value: (pos.manual_value ?? 0) + (tx.amount ?? 0) }).eq("id", pid);
+    if (tx.type === "withdrawal" || tx.type === "withdraw") await supabase.from("positions").update({ manual_value: (pos.manual_value ?? 0) + (tx.amount ?? 0) }).eq("id", pid);
     else if (tx.type === "deposit") await supabase.from("positions").update({ manual_value: Math.max(0, (pos.manual_value ?? 0) - (tx.amount ?? 0)) }).eq("id", pid);
   }
 

@@ -131,7 +131,7 @@ export function ConvertForm() {
         </>
       )}
 
-      <p style={{ fontSize: 12.5, color: "var(--ink-3)", marginBottom: 16 }}>Move value from one holding into another in one step — e.g. sell cash to buy Bitcoin. Selling crypto/stocks/metals records a taxable disposal.</p>
+      <p style={{ fontSize: 12.5, color: "var(--ink-3)", marginBottom: 16 }}>Trade one holding for another in one step — e.g. sell cash to buy Bitcoin, or swap one coin for another. Selling crypto/stocks/metals records a taxable disposal.</p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <label style={{ display: "block" }}>
@@ -208,7 +208,7 @@ export function ConvertForm() {
 
         {from && usdAmount > 0 && (
           <div style={{ fontSize: 12.5, color: "var(--ink-3)", background: "var(--surface-2)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "10px 12px", lineHeight: 1.5 }}>
-            Converting <b style={{ color: "var(--ink)" }}>{fmtUSD(usdAmount)}</b> from {nameOf(from)}
+            Trading <b style={{ color: "var(--ink)" }}>{fmtUSD(usdAmount)}</b> from {nameOf(from)}
             {toUnit && estQty > 0 && destName && (
               <> into <b style={{ color: "var(--ink)" }}>{fmtQty(estQty)} {destName}</b>{effDestPrice ? <> @ {fmtUSD(effDestPrice, { full: true, cents: effDestPrice < 1000 })}{!custom && entry !== "qty" ? " (live)" : ""}</> : null}</>
             )}
@@ -218,7 +218,7 @@ export function ConvertForm() {
         )}
 
         <button disabled={!ready} style={{ padding: 11, background: ready ? "var(--accent)" : "var(--bg-sunk)", color: ready ? "var(--accent-ink)" : "var(--ink-3)", border: "none", borderRadius: 9, fontSize: 13.5, fontWeight: 650, cursor: ready ? "pointer" : "not-allowed", fontFamily: "var(--font-sans)" }}>
-          Convert
+          Trade
         </button>
       </div>
     </form>
