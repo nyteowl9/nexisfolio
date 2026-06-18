@@ -258,7 +258,7 @@ function Milestones({ m }: { m: M }) {
   );
 }
 
-export function RetirementPlanner({ positions }: { positions: Position[] }) {
+export function RetirementPlanner({ positions, debt = 0 }: { positions: Position[]; debt?: number }) {
   const { prefs, update } = usePrefs();
   const r0 = prefs.retirement;
   const [method, setMethod] = useState<"traditional" | "coast" | "fire">(r0.method);
@@ -297,10 +297,10 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
     else { setRetireAge(65); setWR(4); }
   };
 
-  const opts: RetirementOpts = { currentAge, retireAge: Math.max(retireAge, currentAge + 1), annualSpend, monthly, scenario, target: customGoal ? target : null, method, coastAge, withdrawalRate, inflation, includeHome, cagrOverride: overrides, endAge, otherIncome, otherIncomeAge, withdrawalStrategy: strategy };
+  const opts: RetirementOpts = { currentAge, retireAge: Math.max(retireAge, currentAge + 1), annualSpend, monthly, scenario, target: customGoal ? target : null, method, coastAge, withdrawalRate, inflation, includeHome, cagrOverride: overrides, endAge, otherIncome, otherIncomeAge, withdrawalStrategy: strategy, debt };
   const ovKey = JSON.stringify(overrides);
-  const m = useMemo(() => retirement(positions, opts), [positions, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey, endAge, otherIncome, otherIncomeAge, strategy]); // eslint-disable-line react-hooks/exhaustive-deps
-  const mc = useMemo(() => (showMC ? retirementMC(positions, { ...opts, sd: 0.13 }, 500) : null), [positions, showMC, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey, endAge, otherIncome, otherIncomeAge, strategy]); // eslint-disable-line react-hooks/exhaustive-deps
+  const m = useMemo(() => retirement(positions, opts), [positions, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey, endAge, otherIncome, otherIncomeAge, strategy, debt]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mc = useMemo(() => (showMC ? retirementMC(positions, { ...opts, sd: 0.13 }, 500) : null), [positions, showMC, currentAge, retireAge, annualSpend, monthly, scenario, target, customGoal, method, coastAge, withdrawalRate, inflation, includeHome, ovKey, endAge, otherIncome, otherIncomeAge, strategy, debt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hitsGoal = m.fireAge != null;
   const already = hitsGoal && (m.fireAge as number) <= currentAge + 0.05;
@@ -362,7 +362,7 @@ export function RetirementPlanner({ positions }: { positions: Position[] }) {
       </div>
 
       <div style={{ display: "flex", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
-        <Stat label="Investable now" value={fmtUSD(m.investable)} sub={`${m.sectors.length} sectors · ${(m.blended * 100).toFixed(1)}% blended`} />
+        <Stat label="Investable now" value={fmtUSD(m.investable)} sub={debt > 0 ? `net of ${fmtUSD(debt)} debt · ${(m.blended * 100).toFixed(1)}% blended` : `${m.sectors.length} sectors · ${(m.blended * 100).toFixed(1)}% blended`} />
         {method === "coast" ? (
           <Stat label="Coast number" value={fmtUSD(m.coastNumber)} sub={m.coastAchieved ? "reached ✓" : "needed today"} color={m.coastAchieved ? "var(--pos)" : "var(--ink)"} />
         ) : (

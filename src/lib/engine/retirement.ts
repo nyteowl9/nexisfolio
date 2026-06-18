@@ -82,6 +82,9 @@ export interface RetirementOpts {
   inflation?: number;
   /** how retirement spending flexes with the portfolio */
   withdrawalStrategy?: WithdrawalStrategy;
+  /** debt secured by investable assets (e.g. crypto loan, margin) + unsecured —
+   *  netted from the starting balance. Mortgage on an excluded home is omitted. */
+  debt?: number;
 }
 
 /**
@@ -150,6 +153,13 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
   const initWR = o.withdrawalRate / 100;
 
   const invest = investableByClass(positions, o.includeHome);
+  const grossInvestable = Object.values(invest).reduce((s, v) => s + (v ?? 0), 0);
+  // Net debt secured by investable assets from the starting balance, scaled
+  // proportionally across classes so the asset mix (and blended return) is
+  // unchanged — you simply have less net wealth compounding.
+  const debt = Math.max(0, o.debt ?? 0);
+  const scale = grossInvestable > 0 ? Math.max(0, grossInvestable - debt) / grossInvestable : 0;
+  for (const k of Object.keys(invest) as AssetClass[]) invest[k] = (invest[k] ?? 0) * scale;
   const investable = Object.values(invest).reduce((s, v) => s + (v ?? 0), 0);
   const baseCagr = SCENARIOS[o.scenario] || SCENARIOS.Base;
   const cagr: ClassMap = { ...baseCagr, ...(o.cagrOverride || {}) };
@@ -363,7 +373,8 @@ export function retirementMC(
   };
   const initWR = o.withdrawalRate / 100;
   const invest = investableByClass(positions, o.includeHome);
-  const investable = Object.values(invest).reduce((s, v) => s + (v ?? 0), 0);
+  const grossInvestable = Object.values(invest).reduce((s, v) => s + (v ?? 0), 0);
+  const investable = Math.max(0, grossInvestable - Math.max(0, o.debt ?? 0));
   const cagr: ClassMap = { ...(SCENARIOS[o.scenario] || SCENARIOS.Base), ...(o.cagrOverride || {}) };
   const nominalMean = blendedCAGR(cagr, invest);
   const mean = (1 + nominalMean) / (1 + (o.inflation ?? 3) / 100) - 1; // real return
