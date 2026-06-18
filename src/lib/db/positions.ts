@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isUnitPriced, type AssetClass } from "@/lib/engine";
 import { priceKey } from "@/lib/db/portfolio";
 import { fetchQuote } from "@/lib/market/quote";
+import { syncPositionQty } from "@/lib/db/holdings-sync";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const num = (v: FormDataEntryValue | null): number | undefined => {
@@ -64,33 +65,50 @@ export async function insertPosition(
     }
   }
 
-  const base: Record<string, unknown> = {
-    user_id: userId,
-    cls: input.cls,
-    ticker: input.ticker ?? null,
-    name: input.name,
-    account: input.account ?? null,
-    is_live: unit,
-  };
-
-  let row: Record<string, unknown>;
-  if (unit) {
-    row = { ...base, qty: input.qty ?? 0 };
-  } else if (input.cls === "cash") {
-    row = { ...base, manual_value: input.value ?? 0, apy: input.apy ?? null, is_stable: input.isStable ?? false };
-  } else {
-    row = {
-      ...base,
-      manual_value: input.value ?? 0,
-      cost_basis_manual: input.costBasis ?? null,
-      subcat: input.subcat ?? null,
-      last_valued_date: input.valuedDate ?? today(),
-    };
+  // Merge into an existing holding of the same asset (e.g. adding TSLA twice
+  // adds a lot to the one Tesla position instead of creating a duplicate).
+  let posId: string | undefined;
+  if (unit && input.ticker) {
+    const { data: dup } = await supabase
+      .from("positions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("cls", input.cls)
+      .eq("ticker", input.ticker)
+      .limit(1)
+      .maybeSingle();
+    posId = dup?.id as string | undefined;
   }
 
-  const { data, error } = await supabase.from("positions").insert(row).select("id").single();
-  if (error) throw new Error(`add position: ${error.message}`);
-  const posId = data.id as string;
+  if (!posId) {
+    const base: Record<string, unknown> = {
+      user_id: userId,
+      cls: input.cls,
+      ticker: input.ticker ?? null,
+      name: input.name,
+      account: input.account ?? null,
+      is_live: unit,
+    };
+
+    let row: Record<string, unknown>;
+    if (unit) {
+      row = { ...base, qty: input.qty ?? 0 };
+    } else if (input.cls === "cash") {
+      row = { ...base, manual_value: input.value ?? 0, apy: input.apy ?? null, is_stable: input.isStable ?? false };
+    } else {
+      row = {
+        ...base,
+        manual_value: input.value ?? 0,
+        cost_basis_manual: input.costBasis ?? null,
+        subcat: input.subcat ?? null,
+        last_valued_date: input.valuedDate ?? today(),
+      };
+    }
+
+    const { data, error } = await supabase.from("positions").insert(row).select("id").single();
+    if (error) throw new Error(`add position: ${error.message}`);
+    posId = data.id as string;
+  }
 
   let lotId: string | null = null;
   if (unit && input.qty) {
@@ -137,6 +155,9 @@ export async function insertPosition(
     source: "manual",
     note: "Added position",
   });
+
+  // keep position.qty equal to the sum of its lots (matters when merging adds)
+  if (unit) await syncPositionQty(supabase, posId, userId);
 
   return posId;
 }

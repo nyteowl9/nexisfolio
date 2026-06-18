@@ -5,6 +5,7 @@
  */
 import type { AssetClass } from "@/lib/engine";
 import { yahooSymbol } from "./directory";
+import { memo } from "./cache";
 
 export interface Quote {
   price: number;
@@ -15,6 +16,11 @@ const YH_HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; NexisFolio/1.0)" };
 
 /** Resolve a CoinGecko coin id from a symbol (used when no providerId given). */
 export async function resolveCoinId(symbol: string): Promise<string | null> {
+  // a symbol→id mapping is stable; cache it hard so we don't hit search repeatedly
+  return memo(`coinid:${symbol.toLowerCase()}`, 24 * 3600_000, () => resolveCoinIdRaw(symbol));
+}
+
+async function resolveCoinIdRaw(symbol: string): Promise<string | null> {
   try {
     const r = await fetch(
       `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`,

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { seedSamplePortfolio } from "@/lib/db/seed";
 import { getPortfolio } from "@/lib/db/portfolio";
+import { cleanupEmptyHoldings } from "@/lib/db/holdings-sync";
 import { ClearPortfolioButton } from "@/components/app/ClearPortfolioButton";
 import { recordSnapshot } from "@/lib/db/snapshots";
 import { refreshStalePrices } from "@/lib/db/refresh";
@@ -22,6 +23,7 @@ export default async function DashboardPage() {
   if (!user) redirect("/login");
 
   await refreshStalePrices();
+  await cleanupEmptyHoldings(supabase, user.id);
   const positions = await getPortfolio(supabase);
   const liabilities = await getLiabilities(supabase);
   const debt = debtTotal(liabilities);

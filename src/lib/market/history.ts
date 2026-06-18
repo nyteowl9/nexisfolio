@@ -6,6 +6,7 @@
 import type { AssetClass } from "@/lib/engine";
 import { resolveCoinId } from "./quote";
 import { yahooSymbol } from "./directory";
+import { memo } from "./cache";
 
 const YH_HEADERS = { "User-Agent": "Mozilla/5.0 (compatible; NexisFolio/1.0)" };
 
@@ -93,15 +94,19 @@ export async function fetchPriceSeriesDated(
   providerId?: string,
   days = 730
 ): Promise<DatedPrice[] | null> {
-  if (cls === "crypto") {
-    const id = providerId || (await resolveCoinId(ticker));
-    return id ? cryptoSeries(id, Math.min(days, 365)) : null; // CoinGecko free = 365d max
-  }
-  if (cls === "stocks" || cls === "metals") {
-    const sym = yahooSymbol(cls, ticker) ?? ticker;
-    return yahooSeries(sym, "1y");
-  }
-  return null;
+  // cache the heavy history fetch in module memory so re-renders after a
+  // mutation (revalidatePath wipes Next's data cache) don't re-hit the APIs.
+  return memo(`series:${cls}:${ticker}:${providerId ?? ""}:${days}`, 6 * 3600_000, async () => {
+    if (cls === "crypto") {
+      const id = providerId || (await resolveCoinId(ticker));
+      return id ? cryptoSeries(id, Math.min(days, 365)) : null; // CoinGecko free = 365d max
+    }
+    if (cls === "stocks" || cls === "metals") {
+      const sym = yahooSymbol(cls, ticker) ?? ticker;
+      return yahooSeries(sym, "1y");
+    }
+    return null;
+  });
 }
 
 /** Real daily closing prices for a holding (≈1 year). null if unavailable. */
