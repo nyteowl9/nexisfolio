@@ -141,7 +141,8 @@
   function NestWatch() {
     const [view, setView] = useState('landing');   // landing | auth | onboarding
     const [mode, setMode] = useState('signup');
-    const goAuth = (m) => { setMode(m); setView('auth'); window.scrollTo(0, 0); };
+    // Real auth lives in the Next app — send sign-in/sign-up there.
+    const goAuth = () => { window.location.href = '/login'; };
     const enter = (added) => {
       try {
         if (added && added.length) { localStorage.setItem('all_positions_v3', JSON.stringify(added)); localStorage.setItem('all_tx_v3', '[]'); localStorage.setItem('all_realized_v3', '[]'); }

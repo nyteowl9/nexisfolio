@@ -63,7 +63,7 @@
           'Crypto, stocks, real estate, collectibles, cash, and loans \u2014 tracked live, valued honestly, and ready for tax season.'),
         e('div', { className: 'reveal in', style: { display: 'flex', gap: 12, justifyContent: 'center', marginTop: 34, flexWrap: 'wrap' } },
           e('button', { onClick: () => onAuth('signup'), style: btnDark }, 'Get started free'),
-          e('a', { href: '#f0', onClick: nav('#f0'), style: btnGhost }, 'See how it works')),
+          e('a', { href: 'app.html', style: btnGhost }, 'Try the live demo')),
         e('div', { className: 'reveal', style: { marginTop: 56 } }, e(Shot, { src: 'landing-assets/01-shot.jpg', w: 980 }))),
 
       // feature sections
