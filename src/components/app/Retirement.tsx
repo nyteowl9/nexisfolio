@@ -258,6 +258,36 @@ function Milestones({ m }: { m: M }) {
   );
 }
 
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".07em", marginTop: 6, marginBottom: -6 }}>{children}</div>;
+}
+
+function IncomePlanCard({ m, spend, otherIncome, otherIncomeAge, strategy, withdrawalRate, retireAge }: { m: M; spend: number; otherIncome: number; otherIncomeAge: number; strategy: "constant" | "guardrails" | "percent"; withdrawalRate: number; retireAge: number }) {
+  const incomeAtRetire = otherIncome > 0 && retireAge >= otherIncomeAge ? otherIncome : 0;
+  const draw = strategy === "percent" ? m.projWithContrib * (withdrawalRate / 100) : Math.max(0, spend - incomeAtRetire);
+  const firstWR = m.projWithContrib > 0 ? (draw / m.projWithContrib) * 100 : 0;
+  const stratLabel = strategy === "percent" ? "% of balance" : strategy === "guardrails" ? "Guardrails" : "4% rule (fixed)";
+  const Row = ({ k, v, c, strong }: { k: React.ReactNode; v: string; c?: string; strong?: boolean }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "10px 0", borderTop: "var(--hair) solid var(--border)" }}>
+      <span style={{ fontSize: 13, color: "var(--ink-3)" }}>{k}</span>
+      <span className="num" style={{ fontSize: strong ? 15 : 13.5, fontWeight: strong ? 700 : 600, color: c || "var(--ink)" }}>{v}</span>
+    </div>
+  );
+  return (
+    <div style={{ ...card, padding: "16px 22px" }}>
+      <div style={{ fontSize: 13.5, fontWeight: 600 }}>Your income plan</div>
+      <div style={{ fontSize: 12, color: "var(--ink-3)", margin: "2px 0 4px", lineHeight: 1.5 }}>Where your retirement paycheck comes from — today&rsquo;s dollars.</div>
+      <Row k="Target spending" v={fmtUSD(spend) + "/yr"} />
+      <Row k={otherIncome > 0 ? `Social Security / other (from ${otherIncomeAge})` : "Social Security / other income"} v={otherIncome > 0 ? "+" + fmtUSD(otherIncome) + "/yr" : "none added →"} c={otherIncome > 0 ? "var(--pos)" : "var(--ink-3)"} />
+      <Row k="Drawn from portfolio" v={fmtUSD(draw) + "/yr"} strong />
+      <Row k={`Portfolio at ${retireAge}`} v={fmtUSD(m.projWithContrib)} />
+      <Row k="First-year withdrawal" v={firstWR.toFixed(1) + "%"} c={firstWR <= 4 ? "var(--pos)" : firstWR <= 5 ? "var(--c-crypto)" : "var(--neg)"} />
+      <Row k="Strategy" v={stratLabel} />
+      <Row k="Money lasts" v={m.neverDepletes ? `Sustains to ${m.endAge}+` : `to age ${m.depletionAge}`} c={m.neverDepletes ? "var(--pos)" : "var(--neg)"} strong />
+    </div>
+  );
+}
+
 export function RetirementPlanner({ positions, debt = 0 }: { positions: Position[]; debt?: number }) {
   const { prefs, update } = usePrefs();
   const r0 = prefs.retirement;
@@ -370,7 +400,7 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
         )}
         <Stat label={`Projected at ${m.retireAge}`} value={fmtUSD(m.projWithContrib)} sub={`coast: ${fmtUSD(m.projCoast)}`} accent="var(--accent)" />
         {showMC && mc && <Stat label="Success rate" value={mc.successRate + "%"} sub={`${mc.runs} market sims`} color={mc.successRate >= 85 ? "var(--pos)" : mc.successRate >= 65 ? "var(--c-crypto)" : "var(--neg)"} />}
-        <Stat label="Money lasts" value={m.neverDepletes ? "Sustains" : `age ${m.depletionAge}`} color={m.neverDepletes ? "var(--pos)" : "var(--neg)"} sub={`spend ${fmtUSD(m.annualSpend)}/yr`} />
+        <Stat label="Money lasts" value={m.neverDepletes ? "Sustains" : `age ${m.depletionAge}`} color={m.neverDepletes ? "var(--pos)" : "var(--neg)"} sub={strategy === "percent" ? `draw ${withdrawalRate}% of balance/yr` : strategy === "guardrails" ? `flexes around ${fmtUSD(annualSpend)}/yr` : `spend ${fmtUSD(annualSpend)}/yr`} />
       </div>
 
       <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16, alignItems: "start", marginBottom: 18 }}>
@@ -383,10 +413,12 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
             <div style={{ padding: "12px 22px 18px" }}><Projection m={m} mc={mc} /></div>
           </div>
           <Milestones m={m} />
+          <IncomePlanCard m={m} spend={annualSpend} otherIncome={otherIncome} otherIncomeAge={otherIncomeAge} strategy={strategy} withdrawalRate={withdrawalRate} retireAge={retireAge} />
         </div>
         <div style={{ ...card, padding: 20 }}>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600, marginBottom: 14 }}>The big levers</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600, marginBottom: 14 }}>Plan settings</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 17 }}>
+            <GroupLabel>Your plan</GroupLabel>
             <div>
               <div style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 500, marginBottom: 8 }}>Growth scenario</div>
               <Seg value={scenario} options={["Conservative", "Base", "Aggressive"]} onChange={(v) => { setScenario(v); setOverrides({}); }} small />
@@ -405,18 +437,24 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
                 <Slider label="Stop-saving age (what-if)" value={Math.min(coastAge, retireAge)} min={currentAge + 1} max={retireAge} step={1} onChange={setCoastAge} hint="Model stopping earlier or later than the calculated age above." />
               </div>
             )}
+
+            <GroupLabel>Saving &amp; spending</GroupLabel>
             <Slider label="Monthly contribution" value={monthly} min={0} max={40000} step={500} onChange={setMonthly} fmt={(v) => fmtUSD(v, { full: true })} />
             <Slider label="Annual spend in retirement" value={annualSpend} min={40000} max={400000} step={10000} onChange={setSpend} fmt={(v) => fmtUSD(v)} />
+            <Slider label="Social Security / other income" value={otherIncome} min={0} max={120000} step={2000} onChange={setOtherIncome} fmt={(v) => v === 0 ? "none" : fmtUSD(v) + "/yr"} hint="Social Security, pension, annuity, part-time work — reduces what your portfolio must cover. Drag up to add." />
+            {otherIncome > 0 && <Slider label="Other income starts at age" value={otherIncomeAge} min={Math.min(retireAge, 62)} max={75} step={1} onChange={setOtherIncomeAge} />}
+
+            <GroupLabel>Strategy &amp; assumptions</GroupLabel>
             <Slider label="Withdrawal rate" value={withdrawalRate} min={3} max={6} step={0.25} onChange={setWR} fmt={(v) => v + "%"} hint="4% is the classic safe rate. Lower = safer." />
             <div>
               <div style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 500, marginBottom: 8 }}>Withdrawal strategy</div>
               <Seg value={strategy} options={STRATEGIES} onChange={setStrategy} small />
               <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.4 }}>{STRATEGY_HINT[strategy]}</div>
             </div>
-            <Slider label="Other income in retirement" value={otherIncome} min={0} max={120000} step={2000} onChange={setOtherIncome} fmt={(v) => fmtUSD(v) + "/yr"} hint="Social Security, pension, annuity, part-time work — reduces what your portfolio must cover." />
-            {otherIncome > 0 && <Slider label="Other income starts at age" value={otherIncomeAge} min={Math.min(retireAge, 62)} max={75} step={1} onChange={setOtherIncomeAge} />}
             <Slider label="Plan to age (longevity)" value={endAge} min={80} max={105} step={1} onChange={setEndAge} hint="How long the money must last. Planning to 95–100 is prudent." />
             <Slider label="Inflation" value={inflation} min={0} max={6} step={0.5} onChange={setInflation} fmt={(v) => v + "%"} hint="Everything is shown in today's dollars (returns minus inflation)." />
+
+            <GroupLabel>Goal &amp; assets</GroupLabel>
             <div>
               <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
                 <input type="checkbox" checked={customGoal} onChange={(ev) => setCustomGoal(ev.target.checked)} style={{ accentColor: "var(--accent)", cursor: "pointer", width: 15, height: 15 }} />
