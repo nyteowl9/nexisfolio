@@ -118,4 +118,9 @@
   /* header: tighten + hide non-essentials */
   .nw-hdr { padding-left: 12px !important; padding-right: 12px !important; gap: 8px !important; }
   .nw-hide-mobile { display: none !important; }
+
+  /* hero: net-worth sparkline spans full width instead of a fixed 320px */
+  .nw-hero-right { width: 100%; text-align: left !important; }
+  .nw-hero-spark { width: 100%; }
+  .nw-hero-spark svg { width: 100% !important; height: auto !important; }
 }

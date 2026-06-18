@@ -155,7 +155,7 @@ function Treemap({ data, total, activeKey, onSlice }: { data: TreeItem[]; total:
   const W = 760, H = 260;
   const boxes = squarify(data.slice().sort((a, b) => b.value - a.value), 0, 0, W, H);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+    <svg className="nw-treemap" viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
       {boxes.map((b) => {
         const pct = total ? (b.value / total) * 100 : 0;
         const big = b.w > 78 && b.h > 38;
@@ -263,7 +263,7 @@ export function Overview({ positions, history, debt = 0, liabilities = [], perfo
             </span>
           </div>
           {bench && (
-            <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 10, fontSize: 12.5, background: "var(--surface-2)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "6px 11px" }}>
+            <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, fontSize: 12.5, background: "var(--surface-2)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "6px 11px", width: "fit-content", maxWidth: "100%" }}>
               <span style={{ color: "var(--ink-3)" }}>{range} return</span>
               <span className="num" style={{ fontWeight: 700, color: bench.port >= 0 ? "var(--pos)" : "var(--neg)" }}>You {fmtPct(bench.port, true)}</span>
               <span style={{ color: "var(--ink-3)" }}>vs</span>
@@ -274,8 +274,8 @@ export function Overview({ positions, history, debt = 0, liabilities = [], perfo
             </div>
           )}
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ marginBottom: 8 }}>
+        <div className="nw-hero-right" style={{ textAlign: "right" }}>
+          <div className="nw-hero-spark" style={{ marginBottom: 8 }}>
             <Area points={spark} width={320} height={70} color={t.change24 >= 0 ? "var(--pos)" : "var(--neg)"} />
           </div>
           <div style={{ display: "inline-flex", gap: 4, background: "var(--bg-sunk)", padding: 3, borderRadius: 8 }}>
