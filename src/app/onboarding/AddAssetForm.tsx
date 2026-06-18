@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { addPosition } from "@/lib/db/positions";
+import { addPosition, browseCardCatalog } from "@/lib/db/positions";
 import { fmtUSD } from "@/lib/engine";
 
 type Cls = "crypto" | "stocks" | "metals" | "realest" | "private" | "cash" | "loans";
@@ -117,12 +117,16 @@ function SymbolSearch({
 
 export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: string }) {
   const [cls, setCls] = useState<Cls>("crypto");
+  const [subcat, setSubcat] = useState("Trading Cards");
   const [picked, setPicked] = useState<PickResult | null>(null);
   const [price, setPrice] = useState<number | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
   const [qty, setQty] = useState("");
   const [cost, setCost] = useState("");
   const unit = UNIT.includes(cls);
+  // trading-card collections are valued from live card prices, not a typed
+  // value — route these straight into the catalog instead of taking a value.
+  const isCardCollection = cls === "private" && subcat === "Trading Cards";
 
   async function handlePick(r: PickResult) {
     setPicked(r);
@@ -155,7 +159,7 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
   const pl = value - basis;
 
   return (
-    <form action={addPosition} className="space-y-4">
+    <form action={isCardCollection ? browseCardCatalog : addPosition} className="space-y-4">
       <input type="hidden" name="cls" value={cls} />
       <input type="hidden" name="redirectTo" value={redirectTo} />
 
@@ -259,19 +263,10 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
         </>
       ) : (
         <>
-          <label className="block">
-            <span className={flabel}>Name</span>
-            <input
-              name="name"
-              required
-              placeholder={cls === "realest" ? "Rental · Austin" : cls === "cash" ? "HYSA · Marcus" : cls === "loans" ? "Loan · Friend" : "Watch · Patek"}
-              className={field}
-            />
-          </label>
           {cls === "private" && (
             <label className="block">
               <span className={flabel}>Sub-category</span>
-              <select name="subcat" className={field} defaultValue="Trading Cards">
+              <select name="subcat" className={field} value={subcat} onChange={(e) => setSubcat(e.target.value)}>
                 <option>Trading Cards</option>
                 <option>Watches</option>
                 <option>Art</option>
@@ -280,25 +275,47 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
               </select>
             </label>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className={flabel}>{cls === "loans" ? "Outstanding balance" : "Current value"}</span>
-              <input name="value" type="number" step="any" required className={field} />
-            </label>
-            <label className="block">
-              <span className={flabel}>{cls === "cash" ? "APY % (optional)" : "Cost basis"}</span>
-              <input name={cls === "cash" ? "apy" : "costBasis"} type="number" step="any" className={field} />
-            </label>
-          </div>
-          <label className="block">
-            <span className={flabel}>Account / where held (optional)</span>
-            <input name="account" placeholder="Chase / Vault / Deed" className={field} />
-          </label>
+
+          {isCardCollection ? (
+            <div className="rounded-[10px] border border-[#E7E8EA] bg-[#FAFAFB] p-4 text-sm text-[#5C6168]">
+              <p className="font-semibold text-[#15171A]">Trading-card collection</p>
+              <p className="mt-1 text-[13px]">
+                Card collections are valued automatically from live card prices — you don&rsquo;t enter a
+                total. Continue to the catalog to add individual cards or sealed product, each priced for you.
+              </p>
+            </div>
+          ) : (
+            <>
+              <label className="block">
+                <span className={flabel}>Name</span>
+                <input
+                  name="name"
+                  required
+                  placeholder={cls === "realest" ? "Rental · Austin" : cls === "cash" ? "HYSA · Marcus" : cls === "loans" ? "Loan · Friend" : "Watch · Patek"}
+                  className={field}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className={flabel}>{cls === "loans" ? "Outstanding balance" : "Current value"}</span>
+                  <input name="value" type="number" step="any" required className={field} />
+                </label>
+                <label className="block">
+                  <span className={flabel}>{cls === "cash" ? "APY % (optional)" : "Cost basis"}</span>
+                  <input name={cls === "cash" ? "apy" : "costBasis"} type="number" step="any" className={field} />
+                </label>
+              </div>
+              <label className="block">
+                <span className={flabel}>Account / where held (optional)</span>
+                <input name="account" placeholder="Chase / Vault / Deed" className={field} />
+              </label>
+            </>
+          )}
         </>
       )}
 
       <button className="w-full rounded-full bg-[#15171A] py-2.5 text-sm font-medium text-white transition hover:opacity-90">
-        Add asset
+        {isCardCollection ? "Continue to card catalog →" : "Add asset"}
       </button>
     </form>
   );

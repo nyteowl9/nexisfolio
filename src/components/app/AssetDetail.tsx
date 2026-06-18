@@ -218,7 +218,10 @@ function LoanDetail({ p }: { p: Position }) {
 export function AssetDetail({ position, realized, catalog, autoOpenCatalog, priceHistory }: { position: Position; realized: number; catalog?: Catalog; autoOpenCatalog?: boolean; priceHistory?: number[] | null }) {
   const p = position;
   const value = mv(p);
-  const isCards = p.cls === "private" && (p.subcat === "Trading Cards" || !!p.items);
+  // Trading-card collections render the catalog/line-item view; every other
+  // collectible (watch, art, …) is a single manual-valued asset. Keyed on
+  // subcat only — an empty `items` array must NOT trigger the card view.
+  const isCards = p.cls === "private" && p.subcat === "Trading Cards";
   return (
     <div className="nw-page" style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 36px 64px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
