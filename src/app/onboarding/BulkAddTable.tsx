@@ -14,6 +14,7 @@ const muted = "var(--ink-3, #8A9099)";
 export function BulkAddTable() {
   const [rows, setRows] = useState<Row[]>([blank(), blank(), blank()]);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
 
   const setRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const filled = rows.filter((r) => r.ticker.trim() && parseFloat(r.qty) > 0).length;
@@ -23,8 +24,28 @@ export function BulkAddTable() {
       .filter((r) => r.ticker.trim() && parseFloat(r.qty) > 0)
       .map((r) => ({ cls: r.cls, ticker: r.ticker.trim(), qty: parseFloat(r.qty), costPerUnit: r.cost ? parseFloat(r.cost) : undefined, acquiredDate: r.date || undefined }));
     if (!payload.length) return;
+    setError("");
     setPending(true);
-    await addPositionsBulk(payload); // redirects on success
+    try {
+      // verify every symbol resolves to a live price before adding (no silent $0 rows)
+      const checks = await Promise.all(
+        payload.map(async (r) => {
+          const res = await fetch(`/api/quote?cls=${r.cls}&ticker=${encodeURIComponent(r.ticker!)}`);
+          const j = await res.json();
+          return { ticker: r.ticker!, ok: !!(j.quote && j.quote.price) };
+        })
+      );
+      const bad = checks.filter((c) => !c.ok).map((c) => c.ticker);
+      if (bad.length) {
+        setError(`Couldn't find a price for: ${bad.join(", ")}. Check the symbol — e.g. BTC / ETH (crypto), AAPL / VTI (stocks), XAU / XAG (metals).`);
+        setPending(false);
+        return;
+      }
+      await addPositionsBulk(payload); // redirects on success
+    } catch {
+      setError("Something went wrong — please try again.");
+      setPending(false);
+    }
   };
 
   return (
