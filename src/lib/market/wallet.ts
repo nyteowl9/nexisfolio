@@ -23,46 +23,73 @@ interface BlockscoutItem {
 // cap. Require a minimum circulating market cap to count a token as real.
 const MIN_MARKET_CAP = 50_000;
 
-/**
- * EVM ERC-20 balances WITH USD prices via Blockscout's public API — free, no
- * key. Keeps only priced tokens with a real market cap (filters spam/airdrops),
- * sorts by value and caps the count; the user's dust threshold trims the rest.
- */
-async function blockscoutEvmTokens(address: string): Promise<Holding[]> {
+// Public Blockscout instances (free, keyless), one per EVM chain. An EVM
+// (0x…) address is the same across all of them, so we sweep each.
+const EVM_CHAINS: Array<{ base: string; native: string; nativeName: string }> = [
+  { base: "https://eth.blockscout.com", native: "ETH", nativeName: "Ethereum" },
+  { base: "https://base.blockscout.com", native: "ETH", nativeName: "Ethereum" },
+  { base: "https://optimism.blockscout.com", native: "ETH", nativeName: "Ethereum" },
+  { base: "https://arbitrum.blockscout.com", native: "ETH", nativeName: "Ethereum" },
+  { base: "https://polygon.blockscout.com", native: "POL", nativeName: "Polygon" },
+  { base: "https://gnosis.blockscout.com", native: "XDAI", nativeName: "xDai" },
+];
+
+/** Native coin + priced ERC-20 holdings for one EVM chain (Blockscout). */
+async function blockscoutChain(base: string, address: string, native: string, nativeName: string): Promise<Holding[]> {
+  const out: Holding[] = [];
   try {
-    const r = await fetch(`https://eth.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}/token-balances`, { cache: "no-store" });
-    if (!r.ok) return [];
-    const j = await r.json();
-    const arr = (Array.isArray(j) ? j : j?.items ?? []) as BlockscoutItem[];
-    const out: Holding[] = [];
-    for (const it of arr) {
-      const t = it.token ?? {};
-      if (t.type && t.type !== "ERC-20") continue;
-      const dec = Number(t.decimals ?? 18);
-      const qty = Number(it.value ?? 0) / 10 ** dec;
-      const price = Number(t.exchange_rate ?? 0);
-      const mcap = Number(t.circulating_market_cap ?? 0);
-      const ticker = (t.symbol || "").toUpperCase();
-      if (ticker && qty > 0 && price > 0 && mcap >= MIN_MARKET_CAP) out.push({ ticker, name: t.name || ticker, qty, price });
+    const r = await fetch(`${base}/api/v2/addresses/${encodeURIComponent(address)}`, { cache: "no-store" });
+    if (r.ok) {
+      const j = (await r.json()) as { coin_balance?: string; exchange_rate?: string | number | null };
+      const qty = Number(j.coin_balance ?? 0) / 1e18;
+      const price = Number(j.exchange_rate ?? 0);
+      if (qty > 0 && price > 0) out.push({ ticker: native, name: nativeName, qty, price });
     }
-    out.sort((a, b) => b.qty * b.price - a.qty * a.price);
-    return out.slice(0, 100);
-  } catch {
-    return [];
-  }
+  } catch { /* skip */ }
+  try {
+    const r = await fetch(`${base}/api/v2/addresses/${encodeURIComponent(address)}/token-balances`, { cache: "no-store" });
+    if (r.ok) {
+      const j = await r.json();
+      const arr = (Array.isArray(j) ? j : j?.items ?? []) as BlockscoutItem[];
+      for (const it of arr) {
+        const t = it.token ?? {};
+        if (t.type && t.type !== "ERC-20") continue;
+        const qty = Number(it.value ?? 0) / 10 ** Number(t.decimals ?? 18);
+        const price = Number(t.exchange_rate ?? 0);
+        const mcap = Number(t.circulating_market_cap ?? 0);
+        const ticker = (t.symbol || "").toUpperCase();
+        if (ticker && qty > 0 && price > 0 && mcap >= MIN_MARKET_CAP) out.push({ ticker, name: t.name || ticker, qty, price });
+      }
+    }
+  } catch { /* skip */ }
+  return out;
 }
 
 /**
- * All holdings for a wallet: native coin always, plus ERC-20 tokens on EVM
- * (free, keyless via Blockscout). Native price is left 0 for the caller to fill
- * from its own quote source; token prices come from the indexer.
+ * All holdings for a wallet. EVM (0x) addresses are swept across every major
+ * chain (Ethereum, Base, Optimism, Arbitrum, Polygon, Gnosis) — free, keyless
+ * via Blockscout — and merged by ticker. BTC/SOL read their native coin.
+ * Niche chains without a public Blockscout (e.g. HyperEVM) aren't covered.
  */
 export async function fetchHoldings(chain: Chain, address: string): Promise<Holding[]> {
-  const out: Holding[] = [];
-  const native = await fetchNativeBalance(chain, address);
-  if (native != null && native > 0) out.push({ ticker: NATIVE[chain].ticker, name: NATIVE[chain].name, qty: native, price: 0 });
-  if (chain === "eth") out.push(...(await blockscoutEvmTokens(address)));
-  return out;
+  if (chain === "btc" || chain === "sol") {
+    const bal = await fetchNativeBalance(chain, address);
+    if (bal == null || bal <= 0) return [];
+    return [{ ticker: NATIVE[chain].ticker, name: NATIVE[chain].name, qty: bal, price: 0 }];
+  }
+
+  const lists = await Promise.all(EVM_CHAINS.map((c) => blockscoutChain(c.base, address, c.native, c.nativeName)));
+  const merged = new Map<string, Holding>();
+  for (const list of lists) {
+    for (const h of list) {
+      const ex = merged.get(h.ticker);
+      if (ex) { ex.qty += h.qty; if (!ex.price) ex.price = h.price; }
+      else merged.set(h.ticker, { ...h });
+    }
+  }
+  const out = [...merged.values()].filter((h) => h.qty > 0 && h.price > 0);
+  out.sort((a, b) => b.qty * b.price - a.qty * a.price);
+  return out.slice(0, 100);
 }
 
 const ETH_RPCS = ["https://ethereum-rpc.publicnode.com", "https://1rpc.io/eth"];

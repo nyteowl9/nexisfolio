@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CLASSES, fmtUSD, type AssetClass } from "@/lib/engine";
-import { WalletConnect } from "@/components/app/WalletConnect";
+import { WalletConnect, DisconnectButton } from "@/components/app/WalletConnect";
 
 export const metadata = { title: "Connections — NEXIS FOLIO" };
 
@@ -76,7 +76,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           conns.map((c, i) => {
             const cl = c.asset_class ? CLASSES[c.asset_class] : null;
             return (
-              <div key={c.id} className="nw-conn" style={{ display: "grid", gridTemplateColumns: "1fr 150px 160px 130px", alignItems: "center", gap: 12, padding: "14px 22px", borderTop: i ? "var(--hair) solid var(--border)" : "none" }}>
+              <div key={c.id} className="nw-conn" style={{ display: "grid", gridTemplateColumns: "1fr 130px 150px 110px 110px", alignItems: "center", gap: 12, padding: "14px 22px", borderTop: i ? "var(--hair) solid var(--border)" : "none" }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", textTransform: "capitalize" }}>{c.display_name || c.provider}</div>
                   <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2, textTransform: "capitalize" }}>{c.provider} · {c.type}</div>
@@ -90,6 +90,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                   {c.status} {c.last_synced ? `· ${new Date(c.last_synced).toLocaleDateString()}` : ""}
                 </div>
                 <div className="num" style={{ textAlign: "right", fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{c.value != null ? fmtUSD(c.value) : "—"}</div>
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>{c.provider === "wallet" && <DisconnectButton id={c.id} label={c.display_name || "wallet"} />}</div>
               </div>
             );
           })

@@ -322,6 +322,34 @@ export async function addWallet(formData: FormData) {
   redirect(`${back}?added=${encodeURIComponent(`${added} holding${added === 1 ? "" : "s"} synced${skipped ? ` · ${skipped} dust skipped` : ""}`)}`);
 }
 
+/** Server action: disconnect a wallet — removes the connection and the
+ *  holdings it synced (positions + their lots/ledger/disposals). */
+export async function disconnectWallet(formData: FormData) {
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  const id = str(formData.get("id"));
+  if (!id) redirect("/connections");
+
+  const { data: conn } = await supabase.from("connections").select("display_name").eq("id", id).eq("user_id", user.id).single();
+  // display_name is "ETH wallet · 0x12…ef"; positions use account "Wallet · 0x12…ef".
+  const suffix = conn?.display_name?.split("· ")[1];
+  if (suffix) {
+    const acct = `Wallet · ${suffix}`;
+    const { data: ps } = await supabase.from("positions").select("id").eq("user_id", user.id).eq("account", acct);
+    const ids = (ps ?? []).map((p) => p.id as string);
+    if (ids.length) {
+      await supabase.from("transactions").delete().in("position_id", ids).eq("user_id", user.id);
+      await supabase.from("disposals").delete().in("position_id", ids).eq("user_id", user.id);
+      await supabase.from("positions").delete().in("id", ids).eq("user_id", user.id);
+    }
+  }
+  await supabase.from("connections").delete().eq("id", id).eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/connections");
+  redirect("/connections");
+}
+
 /** Server action: mock-link a brokerage by seeding a few sample holdings. */
 export async function linkSampleBrokerage() {
   const supabase = await createClient();
