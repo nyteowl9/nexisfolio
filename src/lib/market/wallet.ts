@@ -14,48 +14,55 @@ const NATIVE: Record<Chain, { ticker: string; name: string }> = {
   sol: { ticker: "SOL", name: "Solana" },
 };
 
+interface BlockscoutItem {
+  value?: string;
+  token?: { symbol?: string; name?: string; decimals?: string | number; exchange_rate?: string | number | null; circulating_market_cap?: string | number | null; type?: string };
+}
+
+// Spam/airdrop tokens often carry a bogus exchange rate but ~no real market
+// cap. Require a minimum circulating market cap to count a token as real.
+const MIN_MARKET_CAP = 50_000;
+
 /**
- * EVM native + ERC-20 balances WITH USD prices in one call, via GoldRush
- * (Covalent). Requires GOLDRUSH_API_KEY / COVALENT_API_KEY; returns null when
- * no key is set (caller falls back to native-only). `no-spam` drops spam tokens.
+ * EVM ERC-20 balances WITH USD prices via Blockscout's public API — free, no
+ * key. Keeps only priced tokens with a real market cap (filters spam/airdrops),
+ * sorts by value and caps the count; the user's dust threshold trims the rest.
  */
-async function covalentEvm(address: string): Promise<Holding[] | null> {
-  const key = process.env.GOLDRUSH_API_KEY || process.env.COVALENT_API_KEY;
-  if (!key) return null;
+async function blockscoutEvmTokens(address: string): Promise<Holding[]> {
   try {
-    const r = await fetch(
-      `https://api.covalenthq.com/v1/eth-mainnet/address/${encodeURIComponent(address)}/balances_v2/?nft=false&no-spam=true`,
-      { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" }
-    );
-    if (!r.ok) return null;
-    const j = (await r.json()) as { data?: { items?: Array<{ contract_ticker_symbol?: string; contract_name?: string; contract_decimals?: number; balance?: string; quote_rate?: number }> } };
-    const items = j?.data?.items ?? [];
-    return items
-      .map((it) => ({
-        ticker: (it.contract_ticker_symbol || "").toUpperCase(),
-        name: it.contract_name || it.contract_ticker_symbol || "",
-        qty: Number(it.balance ?? 0) / 10 ** (it.contract_decimals ?? 18),
-        price: it.quote_rate ?? 0,
-      }))
-      .filter((h) => h.ticker && h.qty > 0 && h.price > 0);
+    const r = await fetch(`https://eth.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}/token-balances`, { cache: "no-store" });
+    if (!r.ok) return [];
+    const j = await r.json();
+    const arr = (Array.isArray(j) ? j : j?.items ?? []) as BlockscoutItem[];
+    const out: Holding[] = [];
+    for (const it of arr) {
+      const t = it.token ?? {};
+      if (t.type && t.type !== "ERC-20") continue;
+      const dec = Number(t.decimals ?? 18);
+      const qty = Number(it.value ?? 0) / 10 ** dec;
+      const price = Number(t.exchange_rate ?? 0);
+      const mcap = Number(t.circulating_market_cap ?? 0);
+      const ticker = (t.symbol || "").toUpperCase();
+      if (ticker && qty > 0 && price > 0 && mcap >= MIN_MARKET_CAP) out.push({ ticker, name: t.name || ticker, qty, price });
+    }
+    out.sort((a, b) => b.qty * b.price - a.qty * a.price);
+    return out.slice(0, 100);
   } catch {
-    return null;
+    return [];
   }
 }
 
 /**
- * All holdings for a wallet: ERC-20 tokens + native when an indexer key is set
- * (EVM), otherwise just the native coin. Native fallback leaves price 0 for the
- * caller to fill from its own quote source.
+ * All holdings for a wallet: native coin always, plus ERC-20 tokens on EVM
+ * (free, keyless via Blockscout). Native price is left 0 for the caller to fill
+ * from its own quote source; token prices come from the indexer.
  */
 export async function fetchHoldings(chain: Chain, address: string): Promise<Holding[]> {
-  if (chain === "eth") {
-    const evm = await covalentEvm(address);
-    if (evm && evm.length) return evm; // includes native ETH + tokens, priced
-  }
-  const bal = await fetchNativeBalance(chain, address);
-  if (bal == null) return [];
-  return [{ ticker: NATIVE[chain].ticker, name: NATIVE[chain].name, qty: bal, price: 0 }];
+  const out: Holding[] = [];
+  const native = await fetchNativeBalance(chain, address);
+  if (native != null && native > 0) out.push({ ticker: NATIVE[chain].ticker, name: NATIVE[chain].name, qty: native, price: 0 });
+  if (chain === "eth") out.push(...(await blockscoutEvmTokens(address)));
+  return out;
 }
 
 const ETH_RPCS = ["https://ethereum-rpc.publicnode.com", "https://1rpc.io/eth"];

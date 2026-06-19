@@ -22,7 +22,7 @@ export function WalletConnect() {
       <div>
         <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--ink)" }}>Crypto wallet</div>
         <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 4, lineHeight: 1.5 }}>
-          Paste a public BTC / ETH / SOL address — we read your live balances on-chain (read-only, no keys).
+          Paste a public BTC / ETH / SOL address — we read your live balances on-chain (ETH tokens included, read-only, no keys). Dust is skipped per your settings.
         </div>
       </div>
       <form action={addWallet} style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
