@@ -8,7 +8,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isUnitPriced, type AssetClass } from "@/lib/engine";
 import { priceKey } from "@/lib/db/portfolio";
 import { fetchQuote } from "@/lib/market/quote";
+import { fetchNativeBalance, type Chain } from "@/lib/market/wallet";
 import { syncPositionQty } from "@/lib/db/holdings-sync";
+import { getPrefs } from "@/lib/db/prefs";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const num = (v: FormDataEntryValue | null): number | undefined => {
@@ -263,29 +265,66 @@ export async function addWallet(formData: FormData) {
     redirect("/onboarding?error=Enter+a+valid+address+or+pick+a+chain");
   }
   const chain = CHAINS[chainKey!];
+  const acct = `Wallet · ${address!.slice(0, 6)}…${address!.slice(-4)}`;
 
-  await insertPosition(supabase, user.id, {
-    cls: "crypto",
-    name: chain.name,
-    ticker: chain.ticker,
-    account: `Wallet · ${address!.slice(0, 6)}…${address!.slice(-4)}`,
-    qty: num(formData.get("qty")),
-    costPerUnit: num(formData.get("costPerUnit")),
-    // price auto-fetched live (no manual entry)
-  });
+  // Read the live native-coin balance from the chain (read-only). Fall back to
+  // a manually typed quantity only if the read fails.
+  const onchain = await fetchNativeBalance(chainKey as Chain, address!);
+  const qty = onchain != null ? onchain : num(formData.get("qty")) ?? 0;
+  if (onchain != null && !(qty > 0)) {
+    redirect(`/onboarding?error=${encodeURIComponent(`No ${chain.ticker} found at that address (only the native coin is read for now — tokens come later).`)}`);
+  }
+  if (!(qty > 0)) {
+    redirect(`/onboarding?error=${encodeURIComponent("Couldn't read that wallet right now — try again, or enter a quantity.")}`);
+  }
 
-  await supabase.from("connections").insert({
-    user_id: user.id,
-    provider: "wallet",
-    type: "wallet",
-    status: "connected",
-    asset_class: "crypto",
-    display_name: `${chain.ticker} · ${address!.slice(0, 6)}…${address!.slice(-4)}`,
-    last_synced: new Date().toISOString(),
-  });
+  const costPerUnit = num(formData.get("costPerUnit"));
+  const price = (await fetchQuote("crypto", chain.ticker))?.price ?? 0;
+
+  // Skip dust per the user's threshold (so tiny balances don't clutter).
+  const dust = (await getPrefs(supabase)).dustThreshold ?? 0;
+  if (onchain != null && dust > 0 && qty * price < dust && !costPerUnit) {
+    redirect(`/onboarding?error=${encodeURIComponent(`${chain.ticker} balance (${qty.toFixed(4)}) is below your $${dust} dust threshold — not added.`)}`);
+  }
+
+  // Idempotent per wallet+coin: re-adding updates the balance instead of
+  // duplicating (and stays separate from a manually-held coin of the same type).
+  const { data: existing } = await supabase
+    .from("positions")
+    .select("id")
+    .eq("user_id", user.id).eq("cls", "crypto").eq("ticker", chain.ticker).eq("account", acct)
+    .limit(1).maybeSingle();
+
+  if (existing) {
+    await supabase.from("positions").update({ qty }).eq("id", existing.id).eq("user_id", user.id);
+  } else {
+    const { data: posRow, error } = await supabase
+      .from("positions")
+      .insert({ user_id: user.id, cls: "crypto", ticker: chain.ticker, name: chain.name, account: acct, is_live: true, qty })
+      .select("id").single();
+    if (error) throw new Error(`add wallet: ${error.message}`);
+    const posId = posRow.id as string;
+    const lotPrice = costPerUnit ?? price ?? 0;
+    await supabase.from("lots").insert({ user_id: user.id, position_id: posId, qty, price: lotPrice, acquired_date: today(), account: acct });
+    if (price) {
+      const admin = createAdminClient();
+      await admin.from("price_cache").upsert({ asset_key: priceKey("crypto", chain.ticker), price, prev_close: price });
+    }
+    await supabase.from("transactions").insert({ user_id: user.id, position_id: posId, tx_date: today(), type: "buy", cls: "crypto", ticker: chain.ticker, name: chain.name, qty, price: lotPrice, amount: qty * lotPrice, account: acct, source: "live", note: "Wallet balance" });
+  }
+
+  const dn = `${chain.ticker} · ${address!.slice(0, 6)}…${address!.slice(-4)}`;
+  const { data: conn } = await supabase.from("connections").select("id").eq("user_id", user.id).eq("provider", "wallet").eq("display_name", dn).limit(1).maybeSingle();
+  if (conn) {
+    await supabase.from("connections").update({ status: "connected", last_synced: new Date().toISOString() }).eq("id", conn.id);
+  } else {
+    await supabase.from("connections").insert({
+      user_id: user.id, provider: "wallet", type: "wallet", status: "connected", asset_class: "crypto", display_name: dn, last_synced: new Date().toISOString(),
+    });
+  }
 
   revalidatePath("/dashboard");
-  redirect(`/onboarding?added=${encodeURIComponent(chain.ticker + " wallet")}`);
+  redirect(`/onboarding?added=${encodeURIComponent(`${chain.ticker} wallet · ${qty.toFixed(4)} ${chain.ticker}`)}`);
 }
 
 /** Server action: mock-link a brokerage by seeding a few sample holdings. */

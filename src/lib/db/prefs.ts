@@ -28,6 +28,8 @@ export interface Prefs {
   costBasis: AccountingMethod;
   showNews: boolean;
   numbers: "abbreviated" | "full";
+  /** Hide wallet/connected holdings worth less than this many dollars (dust). */
+  dustThreshold: number;
   retirement: RetirementPrefs;
 }
 
@@ -58,6 +60,7 @@ export const DEFAULT_PREFS: Prefs = {
   costBasis: "FIFO",
   showNews: true,
   numbers: "abbreviated",
+  dustThreshold: 1,
   retirement: DEFAULT_RETIREMENT,
 };
 

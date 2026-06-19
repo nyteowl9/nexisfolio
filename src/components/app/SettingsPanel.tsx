@@ -61,6 +61,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <Row label="Allocation chart" hint="Donut, bars, or treemap on Overview.">
             <Seg value={prefs.allocChart} options={[{ value: "donut", label: "Donut" }, { value: "bars", label: "Bars" }, { value: "treemap", label: "Treemap" }]} onChange={(v) => set("allocChart", v)} />
           </Row>
+          <Row label="Hide dust below" hint="Skip tiny wallet/connected balances worth less than this.">
+            <Seg value={String(prefs.dustThreshold)} options={[{ value: "0", label: "Off" }, { value: "1", label: "$1" }, { value: "25", label: "$25" }, { value: "100", label: "$100" }]} onChange={(v) => set("dustThreshold", Number(v))} />
+          </Row>
 
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em", paddingTop: 22 }}>Tax</div>
           <Row label="Cost-basis method" hint="How sales match lots for realized gains.">
