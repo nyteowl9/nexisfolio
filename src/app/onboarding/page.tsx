@@ -132,16 +132,13 @@ export default async function OnboardingPage({
             <div className={card}>
               <h3 className="text-sm font-semibold">Add a crypto wallet</h3>
               <p className="mt-1 mb-3 text-xs text-[#8A9099]">
-                Paste a public BTC/ETH/SOL address — we read your live balance on-chain (read-only,
-                no keys). Native coin only for now; tokens come later.
+                Paste a public BTC/ETH/SOL address — we read your live balances on-chain (read-only,
+                no keys). Tiny dust balances are skipped per your settings.
               </p>
               <form action={addWallet} className="space-y-2">
                 <input name="address" required placeholder="0x… / bc1… / Sol address" className={field} />
-                <div className="grid grid-cols-2 gap-2">
-                  <input name="costPerUnit" type="number" step="any" placeholder="Cost/unit (optional)" className={field} />
-                  <input name="qty" type="number" step="any" placeholder="Qty (only if read fails)" className={field} />
-                </div>
-                <button className={`${ghostBtn} w-full`}>Read balance &amp; add</button>
+                <input name="qty" type="number" step="any" placeholder="Quantity (only if the read fails)" className={field} />
+                <button className={`${ghostBtn} w-full`}>Connect &amp; sync</button>
               </form>
             </div>
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CLASSES, fmtUSD, type AssetClass } from "@/lib/engine";
+import { WalletConnect } from "@/components/app/WalletConnect";
 
 export const metadata = { title: "Connections — NEXIS FOLIO" };
 
@@ -35,13 +36,14 @@ function AddCard({ title, desc, cta, href, accent, soon }: { title: string; desc
   );
 }
 
-export default async function ConnectionsPage() {
+export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ added?: string; error?: string }> }) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { added, error } = await searchParams;
   const { data } = await supabase.from("connections").select("*").order("created_at", { ascending: false });
   const conns = (data ?? []) as ConnRow[];
 
@@ -52,9 +54,15 @@ export default async function ConnectionsPage() {
         <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 5 }}>{conns.length} linked source{conns.length === 1 ? "" : "s"}</div>
       </div>
 
+      {(added || error) && (
+        <div style={{ ...card, padding: "12px 16px", marginBottom: 16, fontSize: 13, fontWeight: 500, color: error ? "var(--neg)" : "var(--pos)", borderLeft: `3px solid ${error ? "var(--neg)" : "var(--pos)"}` }}>
+          {error ? error : `Wallet connected — ${added}.`}
+        </div>
+      )}
+
       <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
         <AddCard title="Brokerage & bank" desc="Plaid / SnapTrade — Fidelity, Schwab, Robinhood, IBKR & 12,000+ institutions." cta="Coming soon" href="#" accent="var(--t-stocks)" soon />
-        <AddCard title="Crypto wallet" desc="Paste a public address (BTC/ETH/SOL), read-only. No keys, no signing." cta="Add a wallet" href="/onboarding" accent="var(--t-crypto)" />
+        <WalletConnect />
         <AddCard title="Manual asset" desc="Real estate, collectibles, cash, or a loan you made — value it yourself." cta="Add manually" href="/onboarding" accent="var(--t-private)" />
       </div>
 
