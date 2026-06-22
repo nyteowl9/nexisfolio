@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
-import { addWallet, disconnectWallet } from "@/lib/db/positions";
+import { addWallet, disconnectWallet, resyncWallet } from "@/lib/db/positions";
 
 const card: React.CSSProperties = { background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const input: React.CSSProperties = { width: "100%", padding: "9px 11px", border: "var(--hair) solid var(--border-strong)", borderRadius: 8, fontSize: 13, fontFamily: "var(--font-sans)", background: "var(--surface-2)", color: "var(--ink)", boxSizing: "border-box" };
@@ -12,6 +12,22 @@ function SyncButton() {
     <button disabled={pending} style={{ width: "100%", padding: "9px", textAlign: "center", background: pending ? "var(--bg-sunk)" : "var(--accent)", color: pending ? "var(--ink-3)" : "var(--accent-ink)", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 650, cursor: pending ? "default" : "pointer", fontFamily: "var(--font-sans)" }}>
       {pending ? "Reading the chain…" : "Connect & sync"}
     </button>
+  );
+}
+
+function ResyncInner() {
+  const { pending } = useFormStatus();
+  return (
+    <button disabled={pending} style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", background: "var(--bg-sunk)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "5px 11px", cursor: pending ? "default" : "pointer", fontFamily: "var(--font-sans)" }}>{pending ? "Syncing…" : "Re-sync"}</button>
+  );
+}
+
+export function ResyncButton({ id }: { id: string }) {
+  return (
+    <form action={resyncWallet}>
+      <input type="hidden" name="id" value={id} />
+      <ResyncInner />
+    </form>
   );
 }
 

@@ -8,9 +8,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isUnitPriced, type AssetClass } from "@/lib/engine";
 import { priceKey } from "@/lib/db/portfolio";
 import { fetchQuote } from "@/lib/market/quote";
-import { fetchHoldings, type Chain } from "@/lib/market/wallet";
 import { syncPositionQty } from "@/lib/db/holdings-sync";
-import { getPrefs } from "@/lib/db/prefs";
+import { CHAINS, detectChainKey, syncWallet } from "@/lib/db/wallet-sync";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const num = (v: FormDataEntryValue | null): number | undefined => {
@@ -239,21 +238,6 @@ export async function addPositionsBulk(rows: BulkRow[], doRedirect = true): Prom
   return added;
 }
 
-const CHAINS: Record<string, { ticker: string; name: string }> = {
-  btc: { ticker: "BTC", name: "Bitcoin" },
-  eth: { ticker: "ETH", name: "Ethereum" },
-  sol: { ticker: "SOL", name: "Solana" },
-};
-
-/** Auto-detect chain from a public address shape. */
-export async function detectChain(address: string): Promise<keyof typeof CHAINS | null> {
-  const a = address.trim();
-  if (/^0x[0-9a-fA-F]{40}$/.test(a)) return "eth";
-  if (/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(a)) return "btc";
-  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)) return "sol";
-  return null;
-}
-
 /** Server action: connect a public crypto wallet and sync its live holdings. */
 export async function addWallet(formData: FormData) {
   const supabase = await createClient();
@@ -261,65 +245,35 @@ export async function addWallet(formData: FormData) {
 
   const back = str(formData.get("from")) || "/onboarding";
   const address = str(formData.get("address"));
-  const chainKey = (str(formData.get("chain")) as keyof typeof CHAINS) || (address ? await detectChain(address) : null);
+  const chainKey = (str(formData.get("chain")) as keyof typeof CHAINS) || (address ? detectChainKey(address) : null);
   if (!address || !chainKey || !CHAINS[chainKey]) {
     redirect(`${back}?error=${encodeURIComponent("Enter a valid BTC / ETH / SOL address")}`);
   }
-  const chain = CHAINS[chainKey!];
-  const acct = `Wallet · ${address!.slice(0, 6)}…${address!.slice(-4)}`;
-  const dust = (await getPrefs(supabase)).dustThreshold ?? 0;
-  const admin = createAdminClient();
 
-  // Read on-chain holdings (tokens + native when an indexer key is set; else
-  // native only). Fall back to a manually typed quantity if the read fails.
-  const holdings = await fetchHoldings(chainKey as Chain, address!);
-  if (!holdings.length) {
-    const typed = num(formData.get("qty")) ?? 0;
-    if (typed > 0) holdings.push({ ticker: chain.ticker, name: chain.name, qty: typed, price: 0 });
-    else redirect(`${back}?error=${encodeURIComponent("Couldn't read that wallet right now — try again.")}`);
-  }
-
-  let added = 0, skipped = 0, totalValue = 0;
-  for (const h of holdings) {
-    const price = h.price > 0 ? h.price : (await fetchQuote("crypto", h.ticker))?.price ?? 0;
-    const value = h.qty * price;
-    if (dust > 0 && value < dust) { skipped++; continue; }
-    totalValue += value;
-
-    const { data: existing } = await supabase
-      .from("positions").select("id")
-      .eq("user_id", user.id).eq("cls", "crypto").eq("ticker", h.ticker).eq("account", acct)
-      .limit(1).maybeSingle();
-    if (existing) {
-      await supabase.from("positions").update({ qty: h.qty }).eq("id", existing.id).eq("user_id", user.id);
-    } else {
-      const { data: posRow, error } = await supabase
-        .from("positions")
-        .insert({ user_id: user.id, cls: "crypto", ticker: h.ticker, name: h.name, account: acct, is_live: true, qty: h.qty })
-        .select("id").single();
-      if (error) continue;
-      const posId = posRow.id as string;
-      await supabase.from("lots").insert({ user_id: user.id, position_id: posId, qty: h.qty, price, acquired_date: today(), account: acct });
-      await supabase.from("transactions").insert({ user_id: user.id, position_id: posId, tx_date: today(), type: "buy", cls: "crypto", ticker: h.ticker, name: h.name, qty: h.qty, price, amount: value, account: acct, source: "live", note: "Wallet balance" });
-    }
-    if (price) await admin.from("price_cache").upsert({ asset_key: priceKey("crypto", h.ticker), price, prev_close: price });
-    added++;
-  }
-
+  const { added, skipped } = await syncWallet(supabase, user.id, chainKey!, address!, num(formData.get("qty")) ?? 0);
   if (!added) {
-    redirect(`${back}?error=${encodeURIComponent(`Nothing above your $${dust} dust threshold at that address.`)}`);
+    redirect(`${back}?error=${encodeURIComponent("Couldn't read that wallet, or everything was below your dust threshold.")}`);
   }
-
-  const dn = `${chain.ticker} wallet · ${address!.slice(0, 6)}…${address!.slice(-4)}`;
-  const { data: conn } = await supabase.from("connections").select("id").eq("user_id", user.id).eq("provider", "wallet").eq("display_name", dn).limit(1).maybeSingle();
-  if (conn) {
-    await supabase.from("connections").update({ status: "connected", last_synced: new Date().toISOString(), value: totalValue }).eq("id", conn.id);
-  } else {
-    await supabase.from("connections").insert({ user_id: user.id, provider: "wallet", type: "wallet", status: "connected", asset_class: "crypto", display_name: dn, last_synced: new Date().toISOString(), value: totalValue });
-  }
-
   revalidatePath("/dashboard");
   redirect(`${back}?added=${encodeURIComponent(`${added} holding${added === 1 ? "" : "s"} synced${skipped ? ` · ${skipped} dust skipped` : ""}`)}`);
+}
+
+/** Server action: re-sync an already-connected wallet (refresh balances). */
+export async function resyncWallet(formData: FormData) {
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  const id = str(formData.get("id"));
+  if (!id) redirect("/connections");
+
+  const { data: conn } = await supabase.from("connections").select("external_id").eq("id", id).eq("user_id", user.id).single();
+  const address = conn?.external_id as string | undefined;
+  if (!address) redirect(`/connections?error=${encodeURIComponent("Re-connect this wallet once to enable re-sync.")}`);
+  const chainKey = detectChainKey(address!);
+  if (!chainKey) redirect(`/connections?error=${encodeURIComponent("Couldn't determine this wallet's chain.")}`);
+
+  const { added } = await syncWallet(supabase, user.id, chainKey, address!);
+  revalidatePath("/dashboard");
+  redirect(`/connections?added=${encodeURIComponent(added ? `re-synced ${added} holding${added === 1 ? "" : "s"}` : "re-synced (no balances)")}`);
 }
 
 /** Server action: disconnect a wallet — removes the connection and the

@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/resync", "schedule": "0 8 * * *" }
+  ]
+}
