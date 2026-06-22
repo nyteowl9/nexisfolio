@@ -147,8 +147,8 @@ function Projection({ m, mc }: { m: M; mc: MC | null }) {
   const hb = hi != null && mc ? mc.bands[hi] : null;
 
   return (
-    <div style={{ position: "relative" }}>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}
+    <div className="nw-chart-wrap" style={{ position: "relative" }}>
+      <svg className="nw-chart" width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}
         onMouseMove={(ev) => {
           const r = ev.currentTarget.getBoundingClientRect();
           const px = ((ev.clientX - r.left) / r.width) * W;
@@ -241,7 +241,20 @@ function Milestones({ m }: { m: M }) {
   return (
     <div style={{ ...card, padding: "20px 26px 22px" }}>
       <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600, marginBottom: 26 }}>Your timeline</div>
-      <div style={{ position: "relative", height: 64, margin: "0 6px" }}>
+      {/* mobile: a clean vertical list (the horizontal bar overlaps on phones) */}
+      <div className="nw-mobile-only" style={{ flexDirection: "column", gap: 0 }}>
+        {nodes.map((n, i) => (
+          <div key={n.label + n.age} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 0", borderTop: i ? "var(--hair) solid var(--border)" : "none" }}>
+            <span style={{ width: 11, height: 11, borderRadius: 99, background: n.color, flex: "none" }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{n.label}</div>
+              <div className="num" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>age {n.age}</div>
+            </div>
+            {n.value != null && <div className="num" style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{fmtUSD(n.value)}</div>}
+          </div>
+        ))}
+      </div>
+      <div className="nw-hide-mobile" style={{ position: "relative", height: 64, margin: "0 6px" }}>
         <div style={{ position: "absolute", left: 0, right: 0, top: 31, height: 3, borderRadius: 99, background: "var(--bg-sunk)" }} />
         <div style={{ position: "absolute", left: 0, top: 31, height: 3, borderRadius: 99, background: "var(--accent)", width: `${frac(Math.min(m.retireAge, m.endAge))}%` }} />
         {nodes.map((n, i) => {

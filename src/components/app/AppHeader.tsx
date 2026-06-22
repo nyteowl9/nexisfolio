@@ -37,7 +37,7 @@ export function AppHeader({ email }: { email?: string }) {
             <Image src="/demo/landing-assets/nexis-mark.png" alt="Nexis Folio" width={24} height={24} style={{ height: 24, width: "auto" }} />
             <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: ".08em", color: "var(--ink)" }}>NEXIS FOLIO</span>
           </Link>
-          <nav className="nw-nav" style={{ display: "flex", gap: 20, minWidth: 0, overflowX: "auto" }}>
+          <nav className="nw-nav nw-desktop-nav" style={{ display: "flex", gap: 20, minWidth: 0, overflowX: "auto" }}>
             {tabs.map(([label, href]) => {
               const active = pathname === href || (href === "/dashboard" && pathname.startsWith("/detail"));
               return (
@@ -50,16 +50,31 @@ export function AppHeader({ email }: { email?: string }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
           <span className="nw-hide-mobile" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--pos)", fontWeight: 500 }}><Bolt size={12} /> live</span>
           <button className="nw-hide-mobile" aria-label="Search" style={iconBtn}><Search size={15} /></button>
-          <button aria-label="Settings" onClick={openSettings} style={iconBtn}><Sliders size={15} /></button>
-          <button aria-label="Toggle theme" onClick={toggleTheme} style={iconBtn}>{prefs.theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
+          <button className="nw-hide-mobile" aria-label="Settings" onClick={openSettings} style={iconBtn}><Sliders size={15} /></button>
+          <button className="nw-hide-mobile" aria-label="Toggle theme" onClick={toggleTheme} style={iconBtn}>{prefs.theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
           <button onClick={() => setAddOpen(true)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer", fontFamily: "var(--font-sans)" }}><Plus size={15} /><span className="nw-hide-mobile">Add position</span></button>
-          <form action={signOut} title="Sign out">
+          <form className="nw-hide-mobile" action={signOut} title="Sign out">
             <button style={{ width: 30, height: 30, borderRadius: 99, background: "var(--bg-sunk)", border: "var(--hair) solid var(--border)", color: "var(--ink-2)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{(email?.[0] ?? "?").toUpperCase()}</button>
           </form>
+          <button className="nw-menu-btn" aria-label="Menu" onClick={() => setNavOpen((o) => !o)} style={iconBtn}><Menu size={18} /></button>
         </div>
-
-        <button aria-label="Menu" onClick={() => setNavOpen(!navOpen)} style={{ ...iconBtn, display: "none" }}><Menu size={18} /></button>
       </header>
+
+      {navOpen && (
+        <div className="nw-mobile-menu" style={{ position: "sticky", top: 56, zIndex: 19, background: "var(--surface)", borderBottom: "var(--hair) solid var(--border)", padding: "6px 14px 12px", display: "flex", flexDirection: "column" }}>
+          {tabs.map(([label, href]) => {
+            const active = pathname === href || (href === "/dashboard" && pathname.startsWith("/detail"));
+            return (
+              <Link key={href} href={href} onClick={() => setNavOpen(false)} style={{ padding: "12px 6px", fontSize: 15, fontWeight: active ? 700 : 500, color: active ? "var(--ink)" : "var(--ink-2)", borderBottom: "var(--hair) solid var(--border)" }}>{label}</Link>
+            );
+          })}
+          <div style={{ display: "flex", gap: 10, paddingTop: 12 }}>
+            <button onClick={() => { setNavOpen(false); openSettings(); }} style={{ ...iconBtn, width: "auto", padding: "8px 12px", gap: 6, fontSize: 13 }}><Sliders size={15} /> Settings</button>
+            <button onClick={toggleTheme} style={{ ...iconBtn, width: "auto", padding: "8px 12px", gap: 6, fontSize: 13 }}>{prefs.theme === "dark" ? <Sun size={15} /> : <Moon size={15} />} Theme</button>
+            <form action={signOut} style={{ marginLeft: "auto" }}><button style={{ ...iconBtn, width: "auto", padding: "8px 12px", fontSize: 13, color: "var(--neg)" }}>Sign out</button></form>
+          </div>
+        </div>
+      )}
       {addOpen && <AddTradeModal onClose={() => setAddOpen(false)} />}
     </>
   );

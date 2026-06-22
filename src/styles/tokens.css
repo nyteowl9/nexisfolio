@@ -79,6 +79,10 @@
 @keyframes allspin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 
 .nw-nav::-webkit-scrollbar { display: none; }
+/* hamburger menu shows only on mobile (hidden on desktop) */
+.nw-menu-btn { display: none; }
+.nw-mobile-menu { display: none; }
+.nw-mobile-only { display: none; }
 @media (max-width: 760px) {
   .nw-page { padding-left: 14px !important; padding-right: 14px !important; padding-top: 20px !important; }
   .nw-stack-2, .nw-stack-3 { grid-template-columns: 1fr !important; }
@@ -120,6 +124,15 @@
   /* header: tighten + hide non-essentials */
   .nw-hdr { padding-left: 12px !important; padding-right: 12px !important; gap: 8px !important; }
   .nw-hide-mobile { display: none !important; }
+  /* swap the inline tab bar for a hamburger + dropdown menu */
+  .nw-desktop-nav { display: none !important; }
+  .nw-menu-btn { display: flex !important; }
+  .nw-mobile-menu { display: flex !important; }
+  .nw-mobile-only { display: flex !important; }
+
+  /* dense charts: scroll horizontally at a readable width instead of shrinking */
+  .nw-chart-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .nw-chart { min-width: 620px; }
 
   /* hero: net-worth sparkline spans full width instead of a fixed 320px */
   .nw-hero-right { width: 100%; text-align: left !important; }
