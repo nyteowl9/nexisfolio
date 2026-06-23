@@ -83,8 +83,12 @@
 .nw-menu-btn { display: none; }
 .nw-mobile-menu { display: none; }
 .nw-mobile-only { display: none; }
+/* grid/flex children must be allowed to shrink, or a wide child (e.g. the
+   projection chart) forces the whole column past the viewport on mobile. */
+.nw-stack-2 > * { min-width: 0; }
+.nw-chart-wrap { overflow-x: auto; }
 @media (max-width: 760px) {
-  .nw-page { padding-left: 14px !important; padding-right: 14px !important; padding-top: 20px !important; }
+  .nw-page { padding-left: 14px !important; padding-right: 14px !important; padding-top: 20px !important; overflow-x: clip; }
   .nw-stack-2, .nw-stack-3 { grid-template-columns: 1fr !important; }
 
   /* allocation legend → label · value */
@@ -131,7 +135,7 @@
   .nw-mobile-only { display: flex !important; }
 
   /* dense charts: scroll horizontally at a readable width instead of shrinking */
-  .nw-chart-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .nw-chart-wrap { -webkit-overflow-scrolling: touch; }
   .nw-chart { min-width: 620px; }
 
   /* hero: net-worth sparkline spans full width instead of a fixed 320px */
