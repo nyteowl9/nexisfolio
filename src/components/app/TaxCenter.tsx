@@ -40,25 +40,91 @@ function signed(n: number) {
   return (n >= 0 ? "+" : "−") + fmtUSD(Math.abs(n));
 }
 
+const cardHead: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 22px", borderBottom: "var(--hair) solid var(--border)", fontSize: 13.5, fontWeight: 600, color: "var(--ink)" };
+
+function GainLossBar({ label, gain, loss, max }: { label: string; gain: number; loss: number; max: number }) {
+  const bar = (v: number, color: string, sign: string) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ flex: 1, height: 14, background: "var(--bg-sunk)", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ width: `${max ? (v / max) * 100 : 0}%`, height: "100%", background: color, borderRadius: 4 }} />
+      </div>
+      <span className="num" style={{ width: 84, textAlign: "right", fontSize: 12, color, fontWeight: 600 }}>{sign}{fmtUSD(v)}</span>
+    </div>
+  );
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 7 }}>
+        <span style={{ color: "var(--ink-2)", fontWeight: 500 }}>{label}</span>
+        <span className="num" style={{ color: "var(--ink-3)" }}>net {signed(gain - loss)}</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {bar(gain, "var(--pos)", "+")}
+        {bar(loss, "var(--neg)", "−")}
+      </div>
+    </div>
+  );
+}
+
+function ByClassBars({ byClass }: { byClass: Partial<Record<AssetClass, number>> }) {
+  const entries = (Object.entries(byClass) as Array<[AssetClass, number]>).filter(([, v]) => v !== 0).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  const max = Math.max(1, ...entries.map(([, v]) => Math.abs(v)));
+  if (!entries.length) return <div style={{ fontSize: 12.5, color: "var(--ink-3)", padding: "8px 0" }}>No realized gains by class yet.</div>;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {entries.map(([k, v]) => (
+        <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ width: 92, fontSize: 12.5, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 7 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: CLASSES[k].color }} />{CLASSES[k].label.split(" ")[0]}</span>
+          <div style={{ flex: 1, height: 12, background: "var(--bg-sunk)", borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ width: `${(Math.abs(v) / max) * 100}%`, height: "100%", background: v >= 0 ? "var(--pos)" : "var(--neg)", borderRadius: 4 }} />
+          </div>
+          <span className="num" style={{ width: 84, textAlign: "right", fontSize: 12.5, fontWeight: 600, color: v >= 0 ? "var(--pos)" : "var(--neg)" }}>{signed(v)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function TaxCenter({ summaries, method: initial, year, harvest }: { summaries: Record<AccountingMethod, TaxSummary>; method: AccountingMethod; year: number; harvest: HarvestRow[] }) {
   const [method, setMethod] = useState<AccountingMethod>(initial);
   const s = summaries[method];
 
   const pick = (mth: AccountingMethod) => { setMethod(mth); void updatePrefs({ costBasis: mth }); };
 
-  const exportCsv = () => {
-    const head = ["Description", "Date acquired", "Date sold", "Proceeds", "Cost basis", "Gain/Loss", "Term"];
-    const lines = s.rows.map((r) => [
-      `${r.qty} ${r.asset}`, r.acq, r.date, r.proceeds.toFixed(2), r.basis.toFixed(2), r.gain.toFixed(2), r.term,
-    ]);
-    const csv = [["DRAFT — review with your CPA before filing"], head, ...lines].map((row) => row.join(",")).join("\n");
+  const download = (name: string, rows: (string | number)[][]) => {
+    const csv = [[`DRAFT — Tax Year ${year} — ${method} basis — review with your CPA before filing`], ...rows].map((r) => r.join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const a = document.createElement("a");
-    a.href = url; a.download = `nexisfolio-realized-gains-${year}-draft.csv`; a.click();
+    a.href = url; a.download = name; a.click();
     URL.revokeObjectURL(url);
   };
+  const m2 = (n: number) => n.toFixed(2);
+  const sumBy = (term: "short" | "long", key: "proceeds" | "basis") => s.rows.filter((r) => r.term === term).reduce((a, r) => a + r[key], 0);
+
+  const EXPORTS: Array<{ key: string; name: string; desc: string; build: () => void }> = [
+    {
+      key: "8949", name: "IRS Form 8949", desc: "Sales & dispositions of capital assets",
+      build: () => download(`Form_8949_${year}_${method}_draft.csv`, [["(a) Description", "(b) Date acquired", "(c) Date sold", "(d) Proceeds", "(e) Cost basis", "(h) Gain/(loss)", "Term"], ...s.rows.map((r) => [`${r.qty} ${r.asset}`, r.acq, r.date, m2(r.proceeds), m2(r.basis), m2(r.gain), r.term === "long" ? "Long-term" : "Short-term"])]),
+    },
+    {
+      key: "schd", name: "Schedule D", desc: "Capital gains & losses summary",
+      build: () => download(`Schedule_D_${year}_${method}_draft.csv`, [["", "Proceeds", "Cost basis", "Net gain/(loss)"], ["Short-term", m2(sumBy("short", "proceeds")), m2(sumBy("short", "basis")), m2(s.netST)], ["Long-term", m2(sumBy("long", "proceeds")), m2(sumBy("long", "basis")), m2(s.netLT)], ["Net capital gain/(loss)", "", "", m2(s.netCapGain)]]),
+    },
+    {
+      key: "schb", name: "Schedule B", desc: "Interest income (loan notes)",
+      build: () => download(`Schedule_B_${year}_draft.csv`, [["Payer", "Amount"], ...s.loanInterest.map((l) => [l.name, m2(l.amt)]), ["Total", m2(s.interestIncome)]]),
+    },
+    {
+      key: "pkg", name: "CPA package", desc: "Everything above + a summary, one file",
+      build: () => download(`CPA_package_${year}_${method}_draft.csv`, [
+        ["NEXIS FOLIO — CPA PACKAGE"], ["Realized gains", m2(s.realizedGains)], ["Realized losses", m2(s.realizedLosses)], ["Net capital gain", m2(s.netCapGain)], ["Interest income", m2(s.interestIncome)], ["Est. tax", m2(s.estTax)], [""],
+        ["FORM 8949"], ["Description", "Acquired", "Sold", "Proceeds", "Cost basis", "Gain/(loss)", "Term"], ...s.rows.map((r) => [`${r.qty} ${r.asset}`, r.acq, r.date, m2(r.proceeds), m2(r.basis), m2(r.gain), r.term]), [""],
+        ["NOTE", "Wash-sale and crypto per-wallet basis rules require professional review before filing."],
+      ]),
+    },
+  ];
 
   const harvestable = harvest.reduce((sum, h) => sum + h.loss, 0);
+  const stltMax = Math.max(1, s.stGain, s.stLoss, s.ltGain, s.ltLoss);
 
   return (
     <div className="nw-page" style={{ maxWidth: 1180, margin: "0 auto", padding: "32px 36px 64px" }}>
@@ -89,15 +155,29 @@ export function TaxCenter({ summaries, method: initial, year, harvest }: { summa
         <Stat label="Realized gains" value={fmtUSD(s.realizedGains)} color="var(--pos)" />
         <Stat label="Realized losses" value={fmtUSD(s.realizedLosses)} color="var(--neg)" />
         <Stat label="Net capital gain" value={signed(s.netCapGain)} color={s.netCapGain >= 0 ? "var(--pos)" : "var(--neg)"} sub={`ST ${signed(s.netST)} · LT ${signed(s.netLT)}`} />
-        {s.interestIncome > 0 && <Stat label="Interest income" value={fmtUSD(s.interestIncome)} />}
+        {s.interestIncome > 0 && <Stat label="Interest income" value={fmtUSD(s.interestIncome)} sub={`${s.loanInterest.length} note${s.loanInterest.length === 1 ? "" : "s"} · Sch. B`} />}
         <Stat label="Est. tax" value={fmtUSD(s.estTax)} sub="35% ST · 20% LT" />
+      </div>
+
+      {/* charts */}
+      <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <div style={card}>
+          <div style={cardHead}>Short-term vs long-term</div>
+          <div style={{ padding: "20px 24px" }}>
+            <GainLossBar label="Short-term (≤1yr)" gain={s.stGain} loss={s.stLoss} max={stltMax} />
+            <GainLossBar label="Long-term (>1yr)" gain={s.ltGain} loss={s.ltLoss} max={stltMax} />
+          </div>
+        </div>
+        <div style={card}>
+          <div style={cardHead}>Net gain by asset class</div>
+          <div style={{ padding: "20px 24px" }}><ByClassBars byClass={s.byClassGain} /></div>
+        </div>
       </div>
 
       {/* realized-gains table */}
       <div style={{ ...card, overflow: "hidden", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 22px", borderBottom: s.rows.length ? "var(--hair) solid var(--border)" : "none" }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>Realized gains &amp; losses <span style={{ color: "var(--ink-3)", fontWeight: 450 }}>· {s.rows.length} disposal{s.rows.length === 1 ? "" : "s"}</span></span>
-          {s.rows.length > 0 && <button onClick={exportCsv} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)", background: "var(--bg-sunk)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "7px 13px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>Download draft 8949 (CSV)</button>}
+          <span style={{ fontSize: 14, fontWeight: 600 }}>Disposals <span style={{ color: "var(--ink-3)", fontWeight: 450 }}>· {s.rows.length} · recomputed on method change</span></span>
         </div>
         {s.rows.length === 0 ? (
           <div style={{ padding: "30px 22px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
@@ -143,6 +223,20 @@ export function TaxCenter({ summaries, method: initial, year, harvest }: { summa
             </Link>
           ))
         )}
+      </div>
+
+      {/* exports */}
+      <div style={{ ...card, overflow: "hidden", marginTop: 16 }}>
+        <div style={cardHead}>Export <span style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 450 }}>· drafts for your CPA</span></div>
+        {EXPORTS.map((x, i) => (
+          <div key={x.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "13px 22px", borderTop: i ? "var(--hair) solid var(--border)" : "none" }}>
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{x.name}</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{x.desc}</div>
+            </div>
+            <button onClick={x.build} disabled={s.rows.length === 0 && x.key !== "schb"} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)", background: "var(--bg-sunk)", border: "var(--hair) solid var(--border)", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontFamily: "var(--font-sans)", opacity: s.rows.length === 0 && x.key !== "schb" ? 0.5 : 1, whiteSpace: "nowrap" }}>Download CSV</button>
+          </div>
+        ))}
       </div>
     </div>
   );
