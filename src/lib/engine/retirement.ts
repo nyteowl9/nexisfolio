@@ -168,9 +168,12 @@ export function retirement(positions: Position[], opts: RetirementOpts = {}) {
   const infl = (o.inflation ?? 3) / 100;
   const real = (n: number) => (1 + n) / (1 + infl) - 1;
   const realBlended = real(blended);
-  // Other income (Social Security, pension, …) reduces what the portfolio must
-  // fund, so it shrinks your required number — not just the drawdown.
-  const netSpend = Math.max(0, o.annualSpend - o.otherIncome);
+  // Other income (Social Security, pension, …) shrinks your required number —
+  // but only if it's active by the time you retire. Income that starts AFTER
+  // retirement (e.g. SS at 67 when you retire at 55) leaves a gap you must
+  // self-fund, so it can't lower the number you need to retire on.
+  const incomeAtRetire = o.otherIncomeAge <= o.retireAge ? o.otherIncome : 0;
+  const netSpend = Math.max(0, o.annualSpend - incomeAtRetire);
   const fireNumber = netSpend * (100 / o.withdrawalRate);
   const target = o.target != null ? o.target : fireNumber;
   const yrsToRetire = Math.max(0, o.retireAge - o.currentAge);
