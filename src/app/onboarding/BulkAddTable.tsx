@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { addPositionsBulk, type BulkRow } from "@/lib/db/positions";
+import { parseCsv, mapBrokerageRows } from "@/lib/csv";
 import type { AssetClass } from "@/lib/engine";
 
 type Row = { cls: AssetClass; ticker: string; qty: string; cost: string; date: string };
@@ -16,8 +17,20 @@ export function BulkAddTable({ onDone }: { onDone?: () => void } = {}) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
+  const fileRef = useRef<HTMLInputElement>(null);
   const setRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const filled = rows.filter((r) => r.ticker.trim() && parseFloat(r.qty) > 0).length;
+
+  const importCsv = async (file: File) => {
+    setError("");
+    const text = await file.text();
+    const mapped = mapBrokerageRows(parseCsv(text));
+    if (!mapped.length) {
+      setError("Couldn't find holdings in that file — needs Symbol and Quantity columns (try your broker's positions/portfolio export).");
+      return;
+    }
+    setRows(mapped.map((m) => ({ cls: m.cls, ticker: m.ticker, qty: String(m.qty), cost: m.costPerUnit != null ? String(Math.round(m.costPerUnit * 100) / 100) : "", date: "" })));
+  };
 
   const submit = async () => {
     const payload: BulkRow[] = rows
@@ -57,8 +70,8 @@ export function BulkAddTable({ onDone }: { onDone?: () => void } = {}) {
   return (
     <div>
       <p style={{ fontSize: 12.5, color: muted, marginBottom: 12 }}>
-        Add several market holdings at once — live price fills in automatically. (Real estate, cash &
-        collectibles use the single form.)
+        Add several market holdings at once — or <b style={{ color: "var(--ink, #15171A)" }}>Import broker CSV</b> to
+        pull them from an E-Trade / Fidelity / Schwab positions export. Live price fills in automatically.
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 0.9fr 1fr 1.1fr 28px", gap: 8, fontSize: 10.5, fontWeight: 600, color: muted, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>
         <span>Class</span><span>Ticker</span><span>Qty</span><span>Cost/unit</span><span>Acquired</span><span />
@@ -79,8 +92,11 @@ export function BulkAddTable({ onDone }: { onDone?: () => void } = {}) {
           </div>
         ))}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+      {error && <div style={{ fontSize: 12, color: "var(--neg, #E0443E)", marginTop: 10, lineHeight: 1.4 }}>{error}</div>}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
         <button onClick={() => setRows((rs) => [...rs, blank()])} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-2, #5C6168)", background: "var(--bg-sunk, #F2F3F4)", border: "1px solid var(--border, #E7E8EA)", borderRadius: 7, padding: "7px 12px", cursor: "pointer", fontFamily: "inherit" }}>+ Add row</button>
+        <button onClick={() => fileRef.current?.click()} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-2, #5C6168)", background: "var(--bg-sunk, #F2F3F4)", border: "1px solid var(--border, #E7E8EA)", borderRadius: 7, padding: "7px 12px", cursor: "pointer", fontFamily: "inherit" }}>Import broker CSV</button>
+        <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); e.target.value = ""; }} />
         <button onClick={submit} disabled={pending || filled === 0} style={{ marginLeft: "auto", padding: "9px 18px", background: filled ? "var(--accent, #15171A)" : "var(--bg-sunk, #F2F3F4)", color: filled ? "var(--accent-ink, #fff)" : muted, border: "none", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: filled && !pending ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
           {pending ? "Adding…" : `Add ${filled || ""} asset${filled === 1 ? "" : "s"}`}
         </button>

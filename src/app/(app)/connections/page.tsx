@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CLASSES, fmtUSD, type AssetClass } from "@/lib/engine";
-import { WalletConnect, DisconnectButton, ResyncButton } from "@/components/app/WalletConnect";
+import { WalletConnect, DisconnectButton, ResyncButton, BrokerageImportCard } from "@/components/app/WalletConnect";
 
 export const metadata = { title: "Connections — NEXIS FOLIO" };
 
@@ -61,7 +61,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       )}
 
       <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 18 }}>
-        <AddCard title="Brokerage & bank" desc="Plaid / SnapTrade — Fidelity, Schwab, Robinhood, IBKR & 12,000+ institutions." cta="Coming soon" href="#" accent="var(--t-stocks)" soon />
+        <BrokerageImportCard />
         <WalletConnect />
         <AddCard title="Manual asset" desc="Real estate, collectibles, cash, or a loan you made — value it yourself." cta="Add manually" href="/onboarding" accent="var(--t-private)" />
       </div>

@@ -8,9 +8,9 @@ import { ConvertForm } from "@/components/app/ConvertForm";
 
 type Mode = "add" | "bulk" | "trade";
 
-export function AddTradeModal({ onClose }: { onClose: () => void }) {
+export function AddTradeModal({ onClose, initialMode = "add" }: { onClose: () => void; initialMode?: Mode }) {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("add");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const done = () => { router.refresh(); onClose(); };
   const tab = (m: Mode, label: string) => (
     <button onClick={() => setMode(m)} style={{ padding: "8px 4px", fontSize: 14, fontWeight: mode === m ? 700 : 500, color: mode === m ? "var(--ink)" : "var(--ink-3)", background: "none", border: "none", borderBottom: `2px solid ${mode === m ? "var(--ink)" : "transparent"}`, cursor: "pointer", fontFamily: "var(--font-sans)" }}>{label}</button>

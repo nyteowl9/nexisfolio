@@ -56,7 +56,7 @@ export function AppHeader({ email }: { email?: string }) {
           <form className="nw-hide-mobile" action={signOut} title="Sign out">
             <button style={{ width: 30, height: 30, borderRadius: 99, background: "var(--bg-sunk)", border: "var(--hair) solid var(--border)", color: "var(--ink-2)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{(email?.[0] ?? "?").toUpperCase()}</button>
           </form>
-          <button className="nw-menu-btn" aria-label="Menu" onClick={() => setNavOpen((o) => !o)} style={iconBtn}><Menu size={18} /></button>
+          <button className="nw-menu-btn" aria-label="Menu" onClick={() => setNavOpen((o) => !o)} style={{ ...iconBtn, display: "none" }}><Menu size={18} /></button>
         </div>
       </header>
 
