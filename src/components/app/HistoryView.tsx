@@ -112,7 +112,7 @@ function BigChart({ points, markers, color, dates }: { points: number[]; markers
         )}
       </svg>
       {hover != null && (
-        <div style={{ position: "absolute", left: `${(x(hover) / W) * 100}%`, top: -8, transform: "translate(-50%,-100%)", background: "var(--ink)", color: "var(--accent-ink)", padding: "6px 10px", borderRadius: 7, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", left: `${(x(hover) / W) * 100}%`, top: -8, transform: "translate(-50%,-100%)", background: "var(--ink)", color: "var(--surface)", padding: "6px 10px", borderRadius: 7, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", pointerEvents: "none" }}>
           <span className="num">{fmtUSD(points[hover], { full: true })}</span>
         </div>
       )}
