@@ -1,4 +1,4 @@
-import { signIn, signUp } from "./actions";
+import { AuthButtons } from "./AuthButtons";
 
 export const metadata = { title: "Sign in — NEXIS FOLIO" };
 
@@ -50,18 +50,7 @@ export default async function LoginPage({
             />
           </label>
 
-          <button
-            formAction={signIn}
-            className="w-full rounded-full bg-[#15171A] py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-          >
-            Sign in
-          </button>
-          <button
-            formAction={signUp}
-            className="w-full rounded-full border border-[#E7E8EA] py-2.5 text-sm font-medium text-[#15171A] transition hover:bg-[#F5F5F6]"
-          >
-            Create account
-          </button>
+          <AuthButtons />
         </form>
 
         <p className="mt-4 text-center text-xs text-[#8A9099]">
