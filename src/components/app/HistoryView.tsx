@@ -97,10 +97,11 @@ function BigChart({ points, markers, color, dates }: { points: number[]; markers
         {markers.map((m, i) => {
           const idx = Math.round(m.t * (points.length - 1));
           const c = m.type === "in" ? "var(--pos)" : "var(--neg)";
+          const big = mHover === i;
           return (
             <g key={i} onMouseEnter={() => setMHover(i)} onMouseLeave={() => setMHover(null)} style={{ cursor: "pointer" }}>
-              <circle cx={x(idx)} cy={y(points[idx])} r={mHover === i ? 6 : 4} fill={c} stroke="var(--surface)" strokeWidth={2} />
-              <circle cx={x(idx)} cy={y(points[idx])} r={11} fill="transparent" />
+              <text x={x(idx)} y={y(points[idx])} textAnchor="middle" dominantBaseline="central" fontSize={big ? 18 : 14} fontWeight={800} fill={c} stroke="var(--surface)" strokeWidth={big ? 3.5 : 3} style={{ paintOrder: "stroke" }}>$</text>
+              <circle cx={x(idx)} cy={y(points[idx])} r={12} fill="transparent" />
             </g>
           );
         })}
@@ -221,12 +222,14 @@ export function HistoryView({ net, snapshots, transactions }: { net: number; sna
     return bi;
   };
 
-  const INFLOW = new Set(["sell", "deposit", "dividend", "loan_payment"]);
+  // Green = acquiring/income (buy, deposit, dividend, loan payment); red =
+  // disposing (sell, withdrawal). So purchases read green, sells read red.
+  const ACQUIRE = new Set(["buy", "deposit", "dividend", "loan_payment"]);
   const markers: TxMarker[] = transactions
     .filter((t) => { const d = parseLocal(t.tx_date).getTime(); return d >= seriesMs[0] - DAYMS && d <= nowMs + DAYMS; })
     .map((t) => ({
       t: Math.min(1, Math.max(0, idxForDate(parseLocal(t.tx_date).getTime()) / Math.max(1, points.length - 1))),
-      type: (INFLOW.has(t.type) ? "in" : "out") as "in" | "out",
+      type: (ACQUIRE.has(t.type) ? "in" : "out") as "in" | "out",
       amt: txAmount(t),
       label: `${t.type.replace("_", " ")} · ${t.name ?? t.ticker ?? ""}`.trim(),
       date: t.tx_date,
