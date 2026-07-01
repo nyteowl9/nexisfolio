@@ -30,6 +30,8 @@ export interface Prefs {
   numbers: "abbreviated" | "full";
   /** Hide wallet/connected holdings worth less than this many dollars (dust). */
   dustThreshold: number;
+  /** Net-worth goal for the progress ring (0 = none set). */
+  netWorthGoal: number;
   retirement: RetirementPrefs;
 }
 
@@ -61,6 +63,7 @@ export const DEFAULT_PREFS: Prefs = {
   showNews: true,
   numbers: "abbreviated",
   dustThreshold: 1,
+  netWorthGoal: 0,
   retirement: DEFAULT_RETIREMENT,
 };
 

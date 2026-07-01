@@ -25,6 +25,7 @@ import { AssetIcon } from "@/components/ui/AssetIcon";
 import { Bolt, ArrowUp, ArrowDown, Chevron, Refresh } from "@/components/ui/icons";
 import { refreshPrices } from "@/lib/db/refresh";
 import { usePrefs } from "@/components/app/prefs-context";
+import { GoalCard } from "@/components/app/GoalCard";
 import type { Liability } from "@/lib/db/liabilities";
 import type { Performance } from "@/lib/db/performance";
 
@@ -338,9 +339,9 @@ export function Overview({ positions, history, debt = 0, liabilities = [], perfo
         <MetricCard label="Total P / L" value={(t.pl >= 0 ? "+" : "−") + fmtUSD(Math.abs(t.pl))} sub={fmtPct(t.plPct, true)} subColor={t.pl >= 0 ? "var(--pos)" : "var(--neg)"} />
       </div>
 
-      {/* movers + growth split */}
-      {(moverList.length > 0 || t.basis > 0) && (
-        <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
+      {/* goal + movers + growth split */}
+      <div className="nw-stack-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 18, alignItems: "stretch" }}>
+          <GoalCard net={netWorth} />
           <div style={{ ...card, padding: "15px 19px" }}>
             <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 500, marginBottom: 11 }}>Today&rsquo;s movers</div>
             {moverList.length === 0 ? (
@@ -366,8 +367,7 @@ export function Overview({ positions, history, debt = 0, liabilities = [], perfo
               <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: gains >= 0 ? "var(--pos)" : "var(--neg)", marginRight: 5 }} />Market {gains >= 0 ? "gains" : "losses"} {fmtUSD(Math.abs(gains))}</span>
             </div>
           </div>
-        </div>
-      )}
+      </div>
 
       {/* allocation */}
       <div className="nw-stack-2" style={{ ...card, padding: "24px 28px", marginBottom: 18, display: "grid", gridTemplateColumns: (useBars || useTree) ? "1fr" : "220px 1fr", gap: useTree ? 20 : 40, alignItems: "center" }}>
