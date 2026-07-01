@@ -9,6 +9,7 @@ import { signOut } from "@/app/login/actions";
 import { Bolt, Search, Sun, Moon, Plus, Menu, Sliders } from "@/components/ui/icons";
 import { AddTradeModal } from "@/components/app/AddTradeModal";
 import { GlobalSearch } from "@/components/app/GlobalSearch";
+import { Notifications } from "@/components/app/Notifications";
 import { usePrefs } from "@/components/app/prefs-context";
 
 const ALL_TABS: Array<[string, string]> = [
@@ -64,6 +65,7 @@ export function AppHeader({ email }: { email?: string }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
           <span className="nw-hide-mobile" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--pos)", fontWeight: 500 }}><Bolt size={12} /> live</span>
           <button className="nw-hide-mobile" aria-label="Search" onClick={() => setSearchOpen(true)} style={iconBtn}><Search size={15} /></button>
+          <Notifications iconBtn={iconBtn} />
           <button className="nw-hide-mobile" aria-label="Settings" onClick={openSettings} style={iconBtn}><Sliders size={15} /></button>
           <button className="nw-hide-mobile" aria-label="Toggle theme" onClick={toggleTheme} style={iconBtn}>{prefs.theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
           <button onClick={() => setAddOpen(true)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer", fontFamily: "var(--font-sans)" }}><Plus size={15} /><span className="nw-hide-mobile">Add position</span></button>
