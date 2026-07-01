@@ -362,21 +362,29 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
   const hitAge = already ? currentAge : hitsGoal ? Math.ceil(m.fireAge as number) : null;
   const estBig = !hitsGoal ? "90+" : already ? "Now" : String(hitAge);
   const estPrefix = hitsGoal && !already ? "AGE" : null;
-  const estSub = !hitsGoal ? `On the median plan you don’t reach ${fmtUSD(m.target)} before age ${m.endAge}.` : already ? `You’re already past your ${fmtUSD(m.target)} number — it’s in the bank today.` : `When the median projection crosses your ${fmtUSD(m.target)} retirement number.`;
+  // LEFT = the safe / plan-around age: when you've saved your number (4% rule).
+  const estSub = !hitsGoal
+    ? `On the median plan you don’t reach ${fmtUSD(m.target)} before ${m.endAge}. Save more, spend less, or raise growth.`
+    : already
+      ? `You’re already past your ${fmtUSD(m.target)} number — funded today.`
+      : `When you’ve saved your ${fmtUSD(m.target)} number (≈${Math.round(100 / withdrawalRate)}× spend at ${withdrawalRate}%). The age to plan around.`;
   const safe = m.safeAge;
   const safeNow = safe != null && safe <= currentAge;
   const safeBig = safe == null ? "—" : safeNow ? "Now" : String(safe);
   const safePrefix = safe != null && !safeNow ? "AGE" : null;
   const realPct = (m.safeAccReal * 100).toFixed(1);
-  const safeSub = safe == null ? `Even retiring late, your assumptions can’t safely cover ${fmtUSD(m.annualSpend)}/yr to ${m.endAge}. Try a higher growth scenario, lower spend, or more saving.` : safeNow ? `You could stop working today (age ${currentAge}) and the money lasts to ${m.endAge} — at your ${realPct}% real return (after ${inflation}% inflation), de-risked in retirement.` : `Earliest age you can retire and have the money last to ${m.endAge}, at your ${realPct}% real return (after ${inflation}% inflation), de-risked in retirement.`;
-
-  // One plain-English takeaway for the whole plan.
-  const conf = mc ? ` with ${mc.successRate}% confidence` : "";
-  const summary = safe == null
-    ? `On these assumptions your savings can’t safely cover ${fmtUSD(annualSpend)}/yr to ${m.endAge}. Try saving more, spending less, or a higher-growth mix.`
+  // RIGHT = the optimistic earliest, if the assumed returns actually hold.
+  const safeSub = safe == null
+    ? `Even retiring late, these returns can’t safely cover ${fmtUSD(m.annualSpend)}/yr to ${m.endAge}.`
     : safeNow
-      ? `Good news — you could retire now and spend ${fmtUSD(annualSpend)}/yr to age ${m.endAge}${conf}.`
-      : `On your plan you can retire at ${safe} and spend ${fmtUSD(annualSpend)}/yr to age ${m.endAge}${conf}.`;
+      ? `If your ${realPct}% real return holds, you could stop today — but it leans on those returns, so less margin.`
+      : `If your ${realPct}% real return holds, the simulation says you could stop this early — less margin than your plan-around age.`;
+
+  // One plain-English takeaway, led by the plan-around age (not the optimistic one).
+  const conf = mc ? ` · ${mc.successRate}% confidence` : "";
+  const summary = !hitsGoal
+    ? `On these assumptions you don’t reach ${fmtUSD(m.target)} before ${m.endAge}. Save more, spend less, or raise growth.`
+    : `Plan to retire around ${already ? "now" : hitAge}${safe != null && !safeNow && hitAge != null && safe < hitAge ? ` — as early as ${safe} if your returns hold` : ""}, spending ${fmtUSD(annualSpend)}/yr to ${m.endAge}${conf}.`;
 
   const kv = (k: string, v: string, color?: string) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -415,9 +423,9 @@ export function RetirementPlanner({ positions, debt = 0 }: { positions: Position
       </div>
 
       <div className="nw-stack-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", ...card, marginBottom: 18 }}>
-        <HeroAge tone="var(--accent)" label="Estimated age to hit retirement number" big={estBig} prefix={estPrefix} sub={estSub} />
+        <HeroAge tone="var(--pos)" label="Safe retirement age · plan around this" big={estBig} prefix={estPrefix} sub={estSub} />
         <div style={{ borderLeft: "var(--hair) solid var(--border)" }}>
-          <HeroAge tone="var(--pos)" label="Safe age to retire · using your assumptions" big={safeBig} prefix={safePrefix} sub={safeSub} />
+          <HeroAge tone="var(--ink-3)" label="Earliest · if your returns hold" big={safeBig} prefix={safePrefix} sub={safeSub} />
         </div>
       </div>
 
