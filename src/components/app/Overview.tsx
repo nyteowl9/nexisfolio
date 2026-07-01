@@ -245,6 +245,30 @@ export function Overview({ positions, history, debt = 0, liabilities = [], perfo
     if (p0 > 0 && s0 > 0) bench = { port: (p1 / p0 - 1) * 100, sp: (s1 / s0 - 1) * 100 };
   }
 
+  // auto-generated insights (top few)
+  const insights: { text: string; tone: "pos" | "neg" | "warn" | "info" }[] = [];
+  const topClass = donutData.slice().sort((a, b) => b.value - a.value)[0];
+  if (topClass && t.net > 0) {
+    const p = (topClass.value / t.net) * 100;
+    if (p >= 40) insights.push({ text: `${topClass.label} is ${p.toFixed(0)}% of your portfolio — concentrated.`, tone: "warn" });
+  }
+  if (history && history.length >= 2) {
+    const monthAgo = Date.now() - 30 * 864e5;
+    const win = history.filter((h) => new Date(h.date).getTime() >= monthAgo);
+    if (win.length >= 2) {
+      const ch = win[win.length - 1].net - win[0].net;
+      insights.push({ text: `Net worth ${ch >= 0 ? "+" : "−"}${fmtUSD(Math.abs(ch))} over the last 30 days.`, tone: ch >= 0 ? "pos" : "neg" });
+    }
+  }
+  if (bench) {
+    const d = bench.port - bench.sp;
+    insights.push({ text: `Your holdings are ${d >= 0 ? "beating" : "trailing"} the S&P by ${Math.abs(d).toFixed(1)} pts (${range}).`, tone: d >= 0 ? "pos" : "neg" });
+  }
+  const cashPct = t.net > 0 ? (cls.cash.value / t.net) * 100 : 0;
+  if (cashPct >= 40) insights.push({ text: `${cashPct.toFixed(0)}% of your net worth is in cash — a lot of dry powder.`, tone: "info" });
+  if (gainers[0] && insights.length < 3) insights.push({ text: `${gainers[0].ticker && gainers[0].ticker !== "—" ? gainers[0].ticker : gainers[0].name} is your top mover today, ${fmtPct(change24(gainers[0]) ?? 0, true)}.`, tone: "pos" });
+  const insightColor = (tone: string) => tone === "pos" ? "var(--pos)" : tone === "neg" ? "var(--neg)" : tone === "warn" ? "var(--c-crypto)" : "var(--c-stocks)";
+
   return (
     <div className="nw-page" style={{ maxWidth: 1240, margin: "0 auto", padding: "32px 36px 64px" }}>
       {/* hero */}
@@ -291,6 +315,18 @@ export function Overview({ positions, history, debt = 0, liabilities = [], perfo
           </div>
         </div>
       </div>
+
+      {/* insights */}
+      {insights.length > 0 && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+          {insights.slice(0, 3).map((it, i) => (
+            <div key={i} style={{ ...card, display: "inline-flex", alignItems: "center", gap: 9, padding: "10px 14px", flex: "1 1 240px", minWidth: 220 }}>
+              <span style={{ width: 7, height: 7, borderRadius: 99, background: insightColor(it.tone), flex: "none" }} />
+              <span style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 500, lineHeight: 1.4 }}>{it.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* metric band */}
       <div style={{ display: "flex", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
