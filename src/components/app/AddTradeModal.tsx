@@ -31,7 +31,7 @@ export function AddTradeModal({ onClose, initialMode = "add" }: { onClose: () =>
           {mode === "add" ? (
             <>
               <p style={{ fontSize: 12.5, color: "var(--ink-3)", marginBottom: 14 }}>Add any asset. Crypto/stocks/metals auto-price; everything else by value.</p>
-              <AddAssetForm redirectTo="/dashboard" />
+              <AddAssetForm redirectTo="/dashboard" onDone={done} />
             </>
           ) : mode === "bulk" ? (
             <BulkAddTable onDone={done} />

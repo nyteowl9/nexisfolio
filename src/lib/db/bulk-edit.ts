@@ -5,7 +5,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { isUnitPriced, type AssetClass } from "@/lib/engine";
 import { priceKey } from "@/lib/db/portfolio";
-import { insertPosition } from "@/lib/db/positions";
+import { insertPosition, type PositionInput } from "@/lib/db/positions";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchQuote } from "@/lib/market/quote";
 import { syncPositionQty } from "@/lib/db/holdings-sync";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -35,6 +37,11 @@ export interface BulkEditRow {
 
 export interface BulkUpdate {
   id: string;
+  /** new asset class. Same family (market↔market, manual↔manual) edits in
+   *  place; crossing families rebuilds the position from the row's values. */
+  cls?: AssetClass;
+  /** unit-priced: new or changed symbol */
+  ticker?: string;
   name?: string;
   account?: string | null;
   /** unit-priced: new total quantity (<= 0 deletes the position) */
@@ -198,20 +205,72 @@ async function setPositionQty(supabase: SupabaseClient, userId: string, posId: s
   }
 }
 
+interface PosRow { id: string; cls: AssetClass; ticker: string | null; name: string; account: string | null; subcat: string | null }
+
+/**
+ * Market ↔ manual reclass: the old row (and its ledger) is replaced by a fresh
+ * position built from the edited values, exactly as delete + re-add would do.
+ */
+async function rebuildPosition(supabase: SupabaseClient, userId: string, pos: PosRow, u: BulkUpdate, newCls: AssetClass) {
+  const name = u.name?.trim() || pos.name;
+  const account = u.account === undefined ? pos.account : u.account?.trim() || null;
+  let input: PositionInput;
+  if (isUnitPriced(newCls)) {
+    const ticker = u.ticker?.trim().toUpperCase();
+    if (!ticker || !u.qty || u.qty <= 0) throw new Error("needs a ticker and quantity to become a market holding");
+    input = { cls: newCls, name, ticker, account: account ?? undefined, qty: u.qty, costPerUnit: u.costPerUnit };
+  } else {
+    const { data: lots } = await supabase.from("lots").select("qty,basis").eq("position_id", pos.id).eq("user_id", userId);
+    const qty = (lots ?? []).reduce((s, l) => s + Number(l.qty), 0);
+    const basis = (lots ?? []).reduce((s, l) => s + Number(l.basis), 0);
+    const { data: pr } = await supabase.from("price_cache").select("price").eq("asset_key", priceKey(pos.cls, pos.ticker)).maybeSingle();
+    const value = u.value ?? qty * Number(pr?.price ?? 0);
+    const costBasis = u.costBasis === undefined ? basis || undefined : u.costBasis ?? undefined;
+    input = { cls: newCls, name, account: account ?? undefined, subcat: newCls === "private" ? "Other" : undefined, value, costBasis: newCls === "cash" ? undefined : costBasis };
+  }
+  await deletePositions(supabase, userId, [pos.id]);
+  await insertPosition(supabase, userId, input);
+}
+
 async function applyUpdate(supabase: SupabaseClient, userId: string, u: BulkUpdate) {
-  const { data: pos, error } = await supabase
+  const { data: posRow, error } = await supabase
     .from("positions")
-    .select("id,cls,name,account")
+    .select("id,cls,ticker,name,account,subcat")
     .eq("id", u.id)
     .eq("user_id", userId)
     .single();
-  if (error || !pos) throw new Error("position not found");
-  const cls = pos.cls as AssetClass;
+  if (error || !posRow) throw new Error("position not found");
+  const pos = posRow as PosRow;
+  const oldCls = pos.cls;
+  const cls = u.cls ?? oldCls;
   const unit = isUnitPriced(cls);
+  if (unit !== isUnitPriced(oldCls)) {
+    await rebuildPosition(supabase, userId, pos, u, cls);
+    return;
+  }
 
   const patch: Record<string, unknown> = {};
   if (u.name != null && u.name.trim() && u.name.trim() !== pos.name) patch.name = u.name.trim();
   if (u.account !== undefined) patch.account = u.account?.trim() || null;
+
+  // same-family reclass / re-ticker, in place
+  const ticker = unit ? (u.ticker?.trim().toUpperCase() || pos.ticker) : null;
+  if (cls !== oldCls || (unit && ticker !== pos.ticker)) {
+    patch.cls = cls;
+    if (unit) {
+      if (!ticker) throw new Error("needs a ticker");
+      const q = await fetchQuote(cls, ticker);
+      if (!q) throw new Error(`no price found for ${ticker} as ${cls}`);
+      const { error: pe } = await createAdminClient().from("price_cache").upsert({ asset_key: priceKey(cls, ticker), price: q.price, prev_close: q.prev ?? q.price });
+      if (pe) throw new Error(pe.message);
+      patch.ticker = ticker;
+    } else {
+      patch.subcat = cls === "private" ? pos.subcat ?? "Other" : null;
+      if (cls !== "cash") { patch.apy = null; patch.is_stable = false; }
+      if (cls === "cash") patch.cost_basis_manual = null;
+    }
+    await supabase.from("transactions").update({ cls, ticker }).eq("position_id", u.id).eq("user_id", userId);
+  }
 
   if (unit) {
     if (u.qty != null && u.qty <= 0) {

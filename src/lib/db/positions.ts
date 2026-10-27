@@ -171,17 +171,24 @@ async function requireUser(supabase: SupabaseClient) {
   return user;
 }
 
-/** Server action: add one asset by hand (real, all classes). */
-export async function addPosition(formData: FormData) {
+/** Server action: add one asset by hand (real, all classes). With the
+ *  `noRedirect` field set (the in-app modal) it returns `{ error? }` instead
+ *  of navigating, so the caller can close itself. */
+export async function addPosition(formData: FormData): Promise<{ error?: string } | void> {
   const supabase = await createClient();
   const user = await requireUser(supabase);
 
   const cls = String(formData.get("cls") ?? "") as AssetClass;
   const name = str(formData.get("name"));
   const redirectTo = str(formData.get("redirectTo")) ?? "/onboarding";
-  if (!cls || !name) redirect(`${redirectTo}?error=Name+and+class+required`);
+  const inline = formData.get("noRedirect") === "1";
+  if (!cls || !name) {
+    if (inline) return { error: "Name and class are required." };
+    redirect(`${redirectTo}?error=Name+and+class+required`);
+  }
 
-  await insertPosition(supabase, user.id, {
+  try {
+    await insertPosition(supabase, user.id, {
     cls,
     name: name!,
     ticker: str(formData.get("ticker"))?.toUpperCase(),
@@ -197,8 +204,13 @@ export async function addPosition(formData: FormData) {
     apy: num(formData.get("apy")),
     isStable: formData.get("isStable") === "on",
   });
+  } catch (e) {
+    if (inline) return { error: (e as Error).message };
+    throw e;
+  }
 
   revalidatePath("/dashboard");
+  if (inline) return {};
   redirect(`${redirectTo}?added=${encodeURIComponent(name!)}`);
 }
 

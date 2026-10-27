@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { addPosition, browseCardCatalog } from "@/lib/db/positions";
 import { fmtUSD } from "@/lib/engine";
 
@@ -116,8 +117,18 @@ function SymbolSearch({
   );
 }
 
-export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: string }) {
+function SubmitBtn({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button disabled={pending} aria-busy={pending} className="w-full rounded-full bg-[var(--accent)] py-2.5 text-sm font-medium text-[var(--accent-ink)] transition hover:opacity-90 disabled:cursor-wait disabled:opacity-60">
+      {pending ? "Adding…" : label}
+    </button>
+  );
+}
+
+export function AddAssetForm({ redirectTo = "/onboarding", onDone }: { redirectTo?: string; onDone?: () => void }) {
   const [cls, setCls] = useState<Cls>("crypto");
+  const [submitError, setSubmitError] = useState("");
   const [subcat, setSubcat] = useState("Trading Cards");
   const [picked, setPicked] = useState<PickResult | null>(null);
   const [price, setPrice] = useState<number | null>(null);
@@ -160,7 +171,19 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
   const pl = value - basis;
 
   return (
-    <form action={isCardCollection ? browseCardCatalog : addPosition} className="space-y-4">
+    <form
+      action={async (fd) => {
+        if (isCardCollection) { await browseCardCatalog(); return; }
+        if (!onDone) { await addPosition(fd); return; }
+        // in-app modal: add in place, then let the parent refresh + close
+        fd.set("noRedirect", "1");
+        setSubmitError("");
+        const r = await addPosition(fd);
+        if (r?.error) setSubmitError(r.error);
+        else onDone();
+      }}
+      className="space-y-4"
+    >
       <input type="hidden" name="cls" value={cls} />
       <input type="hidden" name="redirectTo" value={redirectTo} />
 
@@ -315,9 +338,8 @@ export function AddAssetForm({ redirectTo = "/onboarding" }: { redirectTo?: stri
         </>
       )}
 
-      <button className="w-full rounded-full bg-[var(--accent)] py-2.5 text-sm font-medium text-[var(--accent-ink)] transition hover:opacity-90">
-        {isCardCollection ? "Continue to card catalog →" : "Add asset"}
-      </button>
+      {submitError && <p className="text-xs text-[var(--neg)]">{submitError}</p>}
+      <SubmitBtn label={isCardCollection ? "Continue to card catalog →" : "Add asset"} />
     </form>
   );
 }

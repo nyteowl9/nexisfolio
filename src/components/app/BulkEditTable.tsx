@@ -5,7 +5,7 @@ import { applyBulkEdit, loadBulkRows, type BulkAdd, type BulkEditRow, type BulkU
 import { CLASSES, fmtUSD, fmtQty, isUnitPriced, type AssetClass } from "@/lib/engine";
 
 /** Existing position + the user's edits (kept as strings so typing stays smooth). */
-type EditRow = { base: BulkEditRow; name: string; account: string; qty: string; cost: string; value: string; costBasis: string; del: boolean };
+type EditRow = { base: BulkEditRow; cls: AssetClass; ticker: string; name: string; account: string; qty: string; cost: string; value: string; costBasis: string; del: boolean };
 /** A brand-new position typed into the bottom of the grid. */
 type NewRow = { key: number; cls: AssetClass; ticker: string; name: string; account: string; qty: string; cost: string; date: string; value: string; costBasis: string; subcat: string };
 
@@ -28,14 +28,24 @@ const parse = (s: string): number | undefined => {
 };
 const toEdit = (b: BulkEditRow): EditRow => ({
   base: b,
+  cls: b.cls,
+  ticker: b.ticker ?? "",
   name: b.name,
   account: b.account ?? "",
-  qty: fmt(b.qty, 8),
-  cost: fmt(b.avgCost),
-  value: fmt(b.value),
-  costBasis: fmt(b.costBasis),
+  qty: b.unit ? fmt(b.qty, 8) : "",
+  cost: b.unit ? fmt(b.avgCost) : "",
+  value: b.unit ? "" : fmt(b.value),
+  costBasis: b.unit ? "" : fmt(b.costBasis),
   del: false,
 });
+/** Why a row can't be applied yet (e.g. reclassed to market without a ticker). */
+const rowProblem = (r: EditRow): string | null => {
+  if (r.del) return null;
+  const unit = isUnitPriced(r.cls);
+  if (unit && !r.ticker.trim()) return "ticker needed";
+  if (unit && !r.base.unit && !((parse(r.qty) ?? 0) > 0)) return "qty needed";
+  return null;
+};
 let nextKey = 1;
 const blankNew = (cls: AssetClass = "stocks"): NewRow => ({ key: nextKey++, cls, ticker: "", name: "", account: "", qty: "", cost: "", date: "", value: "", costBasis: "", subcat: "Other" });
 
@@ -44,19 +54,24 @@ function diffRow(r: EditRow): BulkUpdate | null {
   const b = r.base;
   const u: BulkUpdate = { id: b.id };
   let dirty = false;
+  const unit = isUnitPriced(r.cls);
+  const crossing = unit !== b.unit; // market ↔ manual: every field counts
+  if (r.cls !== b.cls) { u.cls = r.cls; dirty = true; }
   if (r.name.trim() && r.name.trim() !== b.name) { u.name = r.name.trim(); dirty = true; }
   if ((r.account.trim() || null) !== (b.account ?? null)) { u.account = r.account.trim() || null; dirty = true; }
-  if (b.unit) {
+  if (unit) {
+    const t = r.ticker.trim().toUpperCase();
+    if (t && t !== (b.ticker ?? "")) { u.ticker = t; dirty = true; }
     const q = parse(r.qty);
-    if (q != null && Math.abs(q - b.qty) > 1e-9) { u.qty = q; dirty = true; }
+    if (q != null && (crossing || Math.abs(q - b.qty) > 1e-9)) { u.qty = q; dirty = true; }
     const c = parse(r.cost);
-    if (b.lotCount <= 1 && c != null && Math.abs(c - (b.avgCost ?? NaN)) > 1e-9) { u.costPerUnit = c; dirty = true; }
+    if (c != null && (crossing || (b.lotCount <= 1 && Math.abs(c - (b.avgCost ?? NaN)) > 1e-9))) { u.costPerUnit = c; dirty = true; }
   } else if (b.itemCount === 0) {
     const v = parse(r.value);
-    if (v != null && Math.abs(v - b.value) > 1e-9) { u.value = v; dirty = true; }
-    if (b.cls !== "cash") {
+    if (v != null && (crossing || Math.abs(v - b.value) > 1e-9)) { u.value = v; dirty = true; }
+    if (r.cls !== "cash") {
       const cb = r.costBasis.trim() ? parse(r.costBasis) ?? null : null;
-      if ((cb ?? null) !== (b.costBasis ?? null)) { u.costBasis = cb; dirty = true; }
+      if (crossing ? cb != null : (cb ?? null) !== (b.costBasis ?? null)) { u.costBasis = cb; dirty = true; }
     }
   }
   if (dirty) u.name = u.name ?? b.name; // label for error messages
@@ -91,16 +106,27 @@ export function BulkEditTable({ onDone }: { onDone: () => void }) {
 
   const setRow = (id: string, patch: Partial<EditRow>) => setRows((rs) => (rs ?? []).map((r) => (r.base.id === id ? { ...r, ...patch } : r)));
   const setAdd = (key: number, patch: Partial<NewRow>) => setAdds((as) => as.map((a) => (a.key === key ? { ...a, ...patch } : a)));
+  /** Change a row's class; when it crosses market ↔ manual, prefill the other family's cells from today's numbers. */
+  const changeCls = (id: string, cls: AssetClass) => setRows((rs) => (rs ?? []).map((r) => {
+    if (r.base.id !== id) return r;
+    const b = r.base;
+    const toUnit = isUnitPriced(cls);
+    if (toUnit && !isUnitPriced(r.cls)) return { ...r, cls, ticker: b.unit ? b.ticker ?? "" : r.ticker, qty: b.unit ? fmt(b.qty, 8) : r.qty, cost: b.unit ? fmt(b.avgCost) : r.cost };
+    if (!toUnit && isUnitPriced(r.cls)) return { ...r, cls, value: b.unit ? fmt(b.qty * (b.price ?? 0)) : fmt(b.value), costBasis: b.unit ? fmt(b.qty * (b.avgCost ?? 0)) : fmt(b.costBasis) };
+    return { ...r, cls };
+  }));
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return (rows ?? []).filter((r) => (!clsFilter || r.base.cls === clsFilter) && (!needle || `${r.base.ticker ?? ""} ${r.name} ${r.account} ${r.base.subcat ?? ""}`.toLowerCase().includes(needle)));
   }, [rows, q, clsFilter]);
 
-  const updates = useMemo(() => (rows ?? []).filter((r) => !r.del).map(diffRow).filter((u): u is BulkUpdate => !!u), [rows]);
+  const updates = useMemo(() => (rows ?? []).filter((r) => !r.del && !rowProblem(r)).map(diffRow).filter((u): u is BulkUpdate => !!u), [rows]);
+  const problems = useMemo(() => (rows ?? []).filter((r) => rowProblem(r)).length, [rows]);
   const deletes = useMemo(() => (rows ?? []).filter((r) => r.del).map((r) => r.base.id), [rows]);
   const addPayload = useMemo(() => adds.map(newRowToAdd).filter((a): a is BulkAdd => !!a), [adds]);
   const total = updates.length + deletes.length + addPayload.length;
+  const canApply = total > 0 && problems === 0;
   const allVisibleDel = visible.length > 0 && visible.every((r) => r.del);
 
   /** Paste a spreadsheet block into a new row: fills that row and appends more rows below. */
@@ -132,12 +158,16 @@ export function BulkEditTable({ onDone }: { onDone: () => void }) {
     setNotice("");
     setPending(true);
     try {
-      // make sure every new market symbol prices before writing anything
-      const market = addPayload.filter((a) => isUnitPriced(a.cls));
+      // make sure every new or reclassed market symbol prices before writing anything
+      const market: Array<{ cls: AssetClass; ticker: string }> = addPayload.filter((a) => isUnitPriced(a.cls)).map((a) => ({ cls: a.cls, ticker: a.ticker! }));
+      for (const r of rows ?? []) {
+        const u = r.del ? null : diffRow(r);
+        if (u && isUnitPriced(r.cls) && (u.cls || u.ticker)) market.push({ cls: r.cls, ticker: r.ticker.trim().toUpperCase() });
+      }
       const checks = await Promise.all(market.map(async (a) => {
-        const res = await fetch(`/api/quote?cls=${a.cls}&ticker=${encodeURIComponent(a.ticker!)}`);
+        const res = await fetch(`/api/quote?cls=${a.cls}&ticker=${encodeURIComponent(a.ticker)}`);
         const j = await res.json();
-        return { ticker: a.ticker!, ok: !!(j.quote && j.quote.price) };
+        return { ticker: a.ticker, ok: !!(j.quote && j.quote.price) };
       }));
       const bad = checks.filter((c) => !c.ok).map((c) => c.ticker);
       if (bad.length) {
@@ -161,10 +191,6 @@ export function BulkEditTable({ onDone }: { onDone: () => void }) {
       setPending(false);
     }
   };
-
-  const classChip = (cls: AssetClass) => (
-    <span style={{ ...chip, background: `var(--t-${cls})`, color: `var(--c-${cls})` }}>{CLASSES[cls].label.split(" ")[0]}</span>
-  );
 
   return (
     <div>
@@ -208,31 +234,36 @@ export function BulkEditTable({ onDone }: { onDone: () => void }) {
             const b = r.base;
             const u = diffRow(r);
             const locked = !b.unit && b.itemCount > 0;
+            const unit = isUnitPriced(r.cls);
+            const crossing = unit !== b.unit;
+            const problem = rowProblem(r);
             const mkt = b.unit ? b.qty * (b.price ?? 0) : b.value;
             const rowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: COLS, gap: 8, alignItems: "center", padding: "6px 10px", borderBottom: "var(--hair) solid var(--border)", opacity: r.del ? 0.45 : 1, textDecoration: r.del ? "line-through" : "none", background: r.del ? "var(--bg-sunk)" : u ? "color-mix(in srgb, var(--accent) 5%, transparent)" : "transparent" };
             return (
               <div key={b.id} style={rowStyle}>
                 <input type="checkbox" checked={r.del} onChange={(e) => setRow(b.id, { del: e.target.checked })} title="Delete this position" style={{ cursor: "pointer" }} />
-                <div>{classChip(b.cls)}</div>
+                <select value={r.cls} disabled={r.del || locked} onChange={(e) => changeCls(b.id, e.target.value as AssetClass)} title={locked ? "Card collections keep their class" : "Asset class"} style={{ ...cell, padding: "4px 4px", fontSize: 11.5, fontWeight: 600, cursor: locked ? "default" : "pointer", color: `var(--c-${r.cls})`, background: `var(--t-${r.cls})`, border: `1px solid ${r.cls !== b.cls ? "var(--accent)" : "transparent"}` }}>
+                  {CLASS_ORDER.map((c) => <option key={c} value={c}>{CLASSES[c].label.split(" ")[0]}</option>)}
+                </select>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                  {b.unit && <span className="num" style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", flex: "none", minWidth: 36 }}>{b.ticker}</span>}
+                  {unit && <input value={r.ticker} disabled={r.del} onChange={(e) => setRow(b.id, { ticker: e.target.value.toUpperCase() })} placeholder="TICKER" style={{ ...cell, width: 82, flex: "none", fontWeight: 700, ...(u?.ticker || (crossing && !r.ticker) ? changed : {}) }} title="Symbol" />}
                   <input value={r.name} disabled={r.del} onChange={(e) => setRow(b.id, { name: e.target.value })} style={{ ...cell, ...(u?.name ? changed : {}) }} />
                 </div>
                 <input value={r.account} disabled={r.del} onChange={(e) => setRow(b.id, { account: e.target.value })} placeholder="—" style={{ ...cell, ...(u?.account !== undefined ? changed : {}) }} />
-                {b.unit ? (
-                  <input value={r.qty} disabled={r.del} onChange={(e) => setRow(b.id, { qty: e.target.value })} inputMode="decimal" style={{ ...numCell, ...(u?.qty != null ? changed : {}) }} title="Quantity. 0 deletes the position." />
+                {unit ? (
+                  <input value={r.qty} disabled={r.del} onChange={(e) => setRow(b.id, { qty: e.target.value })} inputMode="decimal" placeholder="Qty" style={{ ...numCell, ...(u?.qty != null ? changed : {}) }} title="Quantity. 0 deletes the position." />
                 ) : (
-                  <input value={r.value} disabled={r.del || locked} onChange={(e) => setRow(b.id, { value: e.target.value })} inputMode="decimal" style={{ ...numCell, ...(u?.value != null ? changed : {}) }} title={locked ? "Value comes from the card items — edit them in Asset Detail" : "Current value"} />
+                  <input value={r.value} disabled={r.del || locked} onChange={(e) => setRow(b.id, { value: e.target.value })} inputMode="decimal" placeholder="Value" style={{ ...numCell, ...(u?.value != null ? changed : {}) }} title={locked ? "Value comes from the card items — edit them in Asset Detail" : "Current value"} />
                 )}
-                {b.unit ? (
-                  <input value={r.cost} disabled={r.del || b.lotCount > 1} onChange={(e) => setRow(b.id, { cost: e.target.value })} inputMode="decimal" placeholder="—" style={{ ...numCell, ...(u?.costPerUnit != null ? changed : {}) }} title={b.lotCount > 1 ? "Average of several lots — edit individual lots in Asset Detail" : "Cost per unit"} />
-                ) : b.cls === "cash" ? (
+                {unit ? (
+                  <input value={r.cost} disabled={r.del || (b.unit && b.lotCount > 1)} onChange={(e) => setRow(b.id, { cost: e.target.value })} inputMode="decimal" placeholder="—" style={{ ...numCell, ...(u?.costPerUnit != null ? changed : {}) }} title={b.unit && b.lotCount > 1 ? "Average of several lots — edit individual lots in Asset Detail" : "Cost per unit"} />
+                ) : r.cls === "cash" ? (
                   <span style={{ fontSize: 11.5, color: "var(--ink-3)", textAlign: "right" }}>—</span>
                 ) : (
                   <input value={r.costBasis} disabled={r.del || locked} onChange={(e) => setRow(b.id, { costBasis: e.target.value })} inputMode="decimal" placeholder="—" style={{ ...numCell, ...(u?.costBasis !== undefined ? changed : {}) }} title="Cost basis" />
                 )}
-                <span className="num" style={{ fontSize: 11.5, color: "var(--ink-3)", textAlign: "right" }}>
-                  {b.unit ? `${b.lotCount} lot${b.lotCount === 1 ? "" : "s"}` : locked ? `${b.itemCount} cards` : b.subcat ?? "manual"}
+                <span className="num" style={{ fontSize: 11.5, color: problem ? "var(--neg)" : crossing ? "var(--accent)" : "var(--ink-3)", textAlign: "right", fontWeight: problem || crossing ? 600 : 400 }} title={crossing ? "Switching between market and manual rebuilds this position from the values here" : undefined}>
+                  {problem ? problem : crossing ? "rebuild" : b.unit ? `${b.lotCount} lot${b.lotCount === 1 ? "" : "s"}` : locked ? `${b.itemCount} cards` : b.subcat ?? "manual"}
                 </span>
                 <span className="num" style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)", textAlign: "right" }}>
                   {fmtUSD(mkt)}
@@ -303,14 +334,17 @@ export function BulkEditTable({ onDone }: { onDone: () => void }) {
           {updates.length > 0 && <span style={{ color: "var(--ink-2)", fontWeight: 600 }}>{updates.length} changed</span>}
           {updates.length > 0 && addPayload.length > 0 && " · "}
           {addPayload.length > 0 && <span style={{ color: "var(--pos)", fontWeight: 600 }}>{addPayload.length} new</span>}
+          {problems > 0 && <span style={{ color: "var(--neg)", fontWeight: 600 }}> · {problems} row{problems === 1 ? "" : "s"} incomplete</span>}
         </span>
-        <button onClick={apply} disabled={pending || !total} style={{ marginLeft: "auto", padding: "9px 18px", background: total ? "var(--accent)" : "var(--bg-sunk)", color: total ? "var(--accent-ink)" : "var(--ink-3)", border: "none", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: total && !pending ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+        <button onClick={apply} disabled={pending || !canApply} style={{ marginLeft: "auto", padding: "9px 18px", background: canApply ? "var(--accent)" : "var(--bg-sunk)", color: canApply ? "var(--accent-ink)" : "var(--ink-3)", border: "none", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: canApply && !pending ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
           {pending ? "Applying…" : total ? `Apply ${total} change${total === 1 ? "" : "s"}` : "No changes"}
         </button>
       </div>
       <p style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 10, lineHeight: 1.45 }}>
         Quantity changes adjust your most recent lot so older tax lots stay intact; cost/unit is editable only for single-lot
-        holdings. Setting a quantity to 0 deletes the position.
+        holdings. Setting a quantity to 0 deletes the position. Changing class within market (crypto/stocks/metals) or within
+        manual (cash/real estate/collectibles/loans) edits in place; switching between the two rebuilds the position from the
+        row&apos;s values and replaces its ledger history.
       </p>
     </div>
   );
