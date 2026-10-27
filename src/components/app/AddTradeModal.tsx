@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { AddAssetForm } from "@/app/onboarding/AddAssetForm";
 import { BulkAddTable } from "@/app/onboarding/BulkAddTable";
 import { ConvertForm } from "@/components/app/ConvertForm";
+import { BulkEditTable } from "@/components/app/BulkEditTable";
 
-type Mode = "add" | "bulk" | "trade";
+export type AddTradeMode = "add" | "bulk" | "trade" | "edit";
+type Mode = AddTradeMode;
 
 export function AddTradeModal({ onClose, initialMode = "add" }: { onClose: () => void; initialMode?: Mode }) {
   const router = useRouter();
@@ -19,9 +21,9 @@ export function AddTradeModal({ onClose, initialMode = "add" }: { onClose: () =>
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(10,12,14,.45)" }} />
-      <div style={{ position: "relative", width: 660, maxWidth: "100%", maxHeight: "90vh", overflow: "auto", background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,.3)" }}>
+      <div style={{ position: "relative", width: mode === "edit" ? 1080 : 660, maxWidth: "100%", maxHeight: "90vh", overflow: "auto", background: "var(--surface)", border: "var(--hair) solid var(--border)", borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,.3)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px 0" }}>
-          <div style={{ display: "flex", gap: 22 }}>{tab("add", "Add position")}{tab("bulk", "Add multiple")}{tab("trade", "Trade")}</div>
+          <div style={{ display: "flex", gap: 22 }}>{tab("add", "Add position")}{tab("bulk", "Add multiple")}{tab("trade", "Trade")}{tab("edit", "Bulk edit")}</div>
           <button onClick={onClose} style={{ background: "var(--bg-sunk)", border: "none", borderRadius: 7, width: 30, height: 30, cursor: "pointer", color: "var(--ink-2)", fontSize: 17 }}>✕</button>
         </div>
         <div style={{ borderBottom: "var(--hair) solid var(--border)", marginTop: 14 }} />
@@ -33,6 +35,8 @@ export function AddTradeModal({ onClose, initialMode = "add" }: { onClose: () =>
             </>
           ) : mode === "bulk" ? (
             <BulkAddTable onDone={done} />
+          ) : mode === "edit" ? (
+            <BulkEditTable onDone={done} />
           ) : (
             <ConvertForm />
           )}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
+import { AddTradeModal } from "@/components/app/AddTradeModal";
 import {
   totals,
   mv,
@@ -192,6 +193,7 @@ export function Overview({ positions, history, debt = 0, liabilities = [], perfo
   const useTree = prefs.allocChart === "treemap";
   const [active, setActive] = useState<AssetClass | null>(null);
   const [range, setRange] = useState<Range>("1W");
+  const [bulkOpen, setBulkOpen] = useState(false);
   const t = totals(positions);
   const netWorth = t.net - debt;
   const cls = t.classes;
@@ -426,11 +428,15 @@ export function Overview({ positions, history, debt = 0, liabilities = [], perfo
                 Clear filter
               </button>
             )}
+            <button onClick={() => setBulkOpen(true)} title="Edit, delete or add many positions at once" style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", background: "var(--bg-sunk)", border: "none", padding: "5px 11px", borderRadius: 6, cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+              Bulk edit
+            </button>
             <form action={refreshPrices}>
               <UpdatePricesBtn />
             </form>
           </div>
         </div>
+        {bulkOpen && <AddTradeModal initialMode="edit" onClose={() => setBulkOpen(false)} />}
 
         {/* column headers */}
         <div className="nw-holding" style={{ display: "grid", gridTemplateColumns: COLS, gap: 12, padding: "9px 22px 9px 24px", borderBottom: "var(--hair) solid var(--border)", background: "var(--surface-2)" }}>
